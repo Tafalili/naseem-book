@@ -328,7 +328,7 @@ class _Components extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AspectRatio(
-                    aspectRatio: 185.5 / 274.5, // trim size
+                    aspectRatio: 186 / 276, // trim size
                     child: Container(
                       color: NColors.sandSoft,
                       alignment: Alignment.center,

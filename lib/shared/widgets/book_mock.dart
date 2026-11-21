@@ -6,7 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
 
 /// Stylised hardcover used until real product photos are uploaded.
-/// Uses the real trim ratio (185.5 × 274.5 mm).
+/// Uses the real trim ratio (186 × 276 mm).
 class BookMock extends StatelessWidget {
   const BookMock({
     super.key,
@@ -21,7 +21,7 @@ class BookMock extends StatelessWidget {
   final bool tilt;
   final Color color;
 
-  static const ratio = 185.5 / 274.5;
+  static const ratio = 186 / 276;
 
   @override
   Widget build(BuildContext context) {

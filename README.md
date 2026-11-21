@@ -35,6 +35,8 @@ flutter build web --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_PUBLISHA
 - Add the first owner: insert into `public.admins (user_id, role)` values (`<auth user id>`, `'owner'`).
 
 ## Roadmap
+Page 186×276 mm (no bleed), printed on A4 imposed like the source files; cover on A4 with 5 mm white stroke.
+
 0 Foundation ✓ · 1 Storefront ✓ · 2 Book editor · 3 Preview & cart · 4 Checkout & tracking · 5 Admin · 6 Print export · 7 Automation & launch
 
 ## Deploy note
