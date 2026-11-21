@@ -211,6 +211,7 @@ class _EditorBody extends ConsumerWidget {
       filled: filled,
       total: total,
       onBack: () => context.go(Routes.product(slug)),
+      onPreview: () => context.go(Routes.preview(slug)),
     );
 
     final nav = _PageNav(
@@ -304,9 +305,14 @@ class _EditorBody extends ConsumerWidget {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.filled, required this.total, required this.onBack});
+  const _TopBar({
+    required this.filled,
+    required this.total,
+    required this.onBack,
+    required this.onPreview,
+  });
   final int filled, total;
-  final VoidCallback onBack;
+  final VoidCallback onBack, onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -344,10 +350,10 @@ class _TopBar extends StatelessWidget {
             Text('محفوظ على جهازك', style: t.labelSmall),
             const SizedBox(width: NSpace.md),
           ],
-          FilledButton(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('المعاينة بالتقليب والسلة تصل في التحديث القادم'))),
-            child: const Text('معاينة'),
+          FilledButton.icon(
+            onPressed: onPreview,
+            icon: const Icon(Icons.menu_book_outlined, size: 18),
+            label: const Text('معاينة'),
           ),
           const SizedBox(width: NSpace.sm),
         ],

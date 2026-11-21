@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -6,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
 import '../../shared/widgets/layout.dart';
 import '../../shared/widgets/privacy_badge.dart';
+import '../cart/cart_controller.dart';
 
 /// Header + scrollable page + footer for all storefront routes.
 class StoreShell extends StatelessWidget {
@@ -38,11 +40,12 @@ class StoreShell extends StatelessWidget {
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inCart = ref.watch(cartProvider).length;
     final mobile = isMobile(context);
     return ContentWidth(
       child: Row(
@@ -80,6 +83,18 @@ class _Header extends StatelessWidget {
             ),
             const SizedBox(width: NSpace.sm),
           ],
+          IconButton(
+            tooltip: 'السلة',
+            onPressed: () => context.go(Routes.cart),
+            icon: Badge(
+              isLabelVisible: inCart > 0,
+              label: Text('$inCart'),
+              backgroundColor: NColors.sand,
+              textColor: NColors.ink,
+              child: const Icon(Icons.shopping_bag_outlined),
+            ),
+          ),
+          const SizedBox(width: NSpace.xs),
           OutlinedButton.icon(
             onPressed: () => ScaffoldMessenger.of(context)
                 .showSnackBar(const SnackBar(content: Text('تتبع الطلب متاح قريباً'))),
