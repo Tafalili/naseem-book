@@ -1,3 +1,5 @@
+import 'package:material_ui/material_ui.dart';
+
 import '../storage_urls.dart';
 
 enum BannerTheme { sage, sand, sky }
@@ -37,5 +39,5 @@ class PromoBanner {
         externalUrl: j['external_url'] as String?,
       );
 
-  String? get imageUrl => templatesUrl(imagePath);
+  ImageProvider? get image => catalogImage(imagePath);
 }

@@ -11,13 +11,13 @@ class BookMock extends StatelessWidget {
   const BookMock({
     super.key,
     this.name = 'نسيم',
-    this.imageUrl,
+    this.image,
     this.tilt = true,
     this.color = NColors.sandSoft,
   });
 
   final String name;
-  final String? imageUrl;
+  final ImageProvider? image;
   final bool tilt;
   final Color color;
 
@@ -43,10 +43,15 @@ class BookMock extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (imageUrl != null)
+              if (image != null)
                 ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(6)),
-                  child: Image.network(imageUrl!, fit: BoxFit.cover),
+                  borderRadius: const BorderRadiusDirectional.only(
+                    topEnd: Radius.circular(10),
+                    bottomEnd: Radius.circular(10),
+                    topStart: Radius.circular(3),
+                    bottomStart: Radius.circular(3),
+                  ),
+                  child: Image(image: image!, fit: BoxFit.cover),
                 )
               else ...[
                 // inner frame

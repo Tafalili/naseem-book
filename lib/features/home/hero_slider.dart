@@ -11,8 +11,11 @@ import '../../shared/widgets/layout.dart';
 
 /// Auto-playing promo carousel with dots, swipe and hover-pause.
 class HeroSlider extends StatefulWidget {
-  const HeroSlider({super.key, required this.banners});
+  const HeroSlider({super.key, required this.banners, this.productCovers = const {}});
   final List<PromoBanner> banners;
+
+  /// slug -> cover, so product banners show the real book.
+  final Map<String, ImageProvider> productCovers;
 
   @override
   State<HeroSlider> createState() => _HeroSliderState();
@@ -62,7 +65,11 @@ class _HeroSliderState extends State<HeroSlider> {
                 controller: _controller,
                 itemCount: widget.banners.length,
                 onPageChanged: (i) => setState(() => _index = i),
-                itemBuilder: (_, i) => _Slide(banner: widget.banners[i], mobile: mobile),
+                itemBuilder: (_, i) => _Slide(
+                  banner: widget.banners[i],
+                  mobile: mobile,
+                  productCover: widget.productCovers[widget.banners[i].productSlug],
+                ),
               ),
             ),
           ),
@@ -98,9 +105,10 @@ class _HeroSliderState extends State<HeroSlider> {
 }
 
 class _Slide extends StatelessWidget {
-  const _Slide({required this.banner, required this.mobile});
+  const _Slide({required this.banner, required this.mobile, this.productCover});
   final PromoBanner banner;
   final bool mobile;
+  final ImageProvider? productCover;
 
   (List<Color>, Color) get _palette => switch (banner.theme) {
         BannerTheme.sage => ([NColors.sageSoft, NColors.skySoft], NColors.sandSoft),
@@ -126,7 +134,7 @@ class _Slide extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final (gradient, bookColor) = _palette;
-    final imageUrl = banner.imageUrl;
+    final image = banner.image;
 
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,13 +159,13 @@ class _Slide extends StatelessWidget {
       ],
     );
 
-    final visual = imageUrl != null
+    final visual = image != null
         ? ClipRRect(
             borderRadius: const BorderRadius.all(NRadius.md),
-            child: Image.network(imageUrl, fit: BoxFit.cover),
+            child: Image(image: image, fit: BoxFit.cover),
           )
         : banner.productSlug != null
-            ? BookMock(color: bookColor)
+            ? BookMock(color: bookColor, image: productCover)
             : Container(
                 decoration: BoxDecoration(
                   color: NColors.surface.withValues(alpha: .7),

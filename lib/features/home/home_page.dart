@@ -59,7 +59,15 @@ class _HomePageState extends ConsumerState<HomePage> {
           child: banners.when(
             loading: () => const _SliderSkeleton(),
             error: (_, _) => const SizedBox.shrink(),
-            data: (b) => b.isEmpty ? const SizedBox.shrink() : HeroSlider(banners: b),
+            data: (b) => b.isEmpty
+                ? const SizedBox.shrink()
+                : HeroSlider(
+                    banners: b,
+                    productCovers: {
+                      for (final p in products.value ?? const <Product>[])
+                        if (p.coverImage != null) p.slug: p.coverImage!,
+                    },
+                  ),
           ),
         ),
         products.when(
@@ -74,6 +82,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (featured != null) _FeaturedProduct(product: featured),
+                if (featured != null && featured.galleryImages.length > 1)
+                  _InsideBook(product: featured),
                 const _HowItWorks(),
                 ContentWidth(
                   key: _productsKey,
@@ -185,7 +195,7 @@ class _FeaturedProduct extends StatelessWidget {
 
     final visual = SizedBox(
       height: mobile ? 300 : 440,
-      child: Center(child: BookMock(imageUrl: product.coverUrl)),
+      child: Center(child: BookMock(image: product.coverImage)),
     );
 
     return Container(
@@ -202,6 +212,57 @@ class _FeaturedProduct extends StatelessWidget {
                   Expanded(flex: 4, child: visual),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _InsideBook extends StatelessWidget {
+  const _InsideBook({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final mobile = isMobile(context);
+    // Wide images are spreads; skip the (portrait) back cover here.
+    final spreads = product.gallery
+        .where((p) => p.contains('spread'))
+        .map((p) => product.galleryImages[product.gallery.indexOf(p)])
+        .toList();
+    if (spreads.isEmpty) return const SizedBox.shrink();
+    final h = mobile ? 200.0 : 300.0;
+    return Container(
+      color: NColors.surface,
+      padding: const EdgeInsets.only(bottom: NSpace.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ContentWidth(
+            child: SectionHeader(
+                title: 'من داخل الكتاب', subtitle: 'صفحات مصممة لكل شهر من سنته الأولى'),
+          ),
+          const SizedBox(height: NSpace.lg),
+          SizedBox(
+            height: h,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: mobile ? NSpace.md : NSpace.xl),
+              itemCount: spreads.length,
+              separatorBuilder: (_, _) => const SizedBox(width: NSpace.lg),
+              itemBuilder: (_, i) => Container(
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.all(NRadius.sm),
+                  boxShadow: NShadow.soft,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: AspectRatio(
+                  aspectRatio: 2 * 186 / 276,
+                  child: Image(image: spreads[i], fit: BoxFit.cover),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -308,7 +369,7 @@ class ProductCard extends StatelessWidget {
                   height: 280,
                   color: NColors.sandSoft,
                   padding: const EdgeInsets.symmetric(vertical: NSpace.lg),
-                  child: Center(child: BookMock(imageUrl: product.coverUrl, tilt: false)),
+                  child: Center(child: BookMock(image: product.coverImage, tilt: false)),
                 ),
                 if (product.badge != null)
                   PositionedDirectional(

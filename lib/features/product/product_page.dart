@@ -61,7 +61,7 @@ class _ProductViewState extends ConsumerState<_ProductView> {
   Widget build(BuildContext context) {
     final p = widget.product;
     final mobile = isMobile(context);
-    final images = [if (p.coverUrl != null) p.coverUrl!, ...p.galleryUrls];
+    final images = [if (p.coverImage != null) p.coverImage!, ...p.galleryImages];
 
     final gallery = Column(
       children: [
@@ -80,7 +80,7 @@ class _ProductViewState extends ConsumerState<_ProductView> {
                   : ClipRRect(
                       key: ValueKey(_image),
                       borderRadius: const BorderRadius.all(NRadius.md),
-                      child: Image.network(images[_image], fit: BoxFit.contain),
+                      child: Image(image: images[_image], fit: BoxFit.contain),
                     ),
             ),
           ),
@@ -102,7 +102,7 @@ class _ProductViewState extends ConsumerState<_ProductView> {
                     border: Border.all(
                         color: i == _image ? NColors.sage : NColors.line,
                         width: i == _image ? 2 : 1),
-                    image: DecorationImage(image: NetworkImage(images[i]), fit: BoxFit.cover),
+                    image: DecorationImage(image: images[i], fit: BoxFit.cover),
                   ),
                 ),
               ),

@@ -1,3 +1,5 @@
+import 'package:material_ui/material_ui.dart';
+
 import '../storage_urls.dart';
 
 class Product {
@@ -51,8 +53,9 @@ class Product {
         isFeatured: j['is_featured'] as bool? ?? false,
       );
 
-  String? get coverUrl => templatesUrl(coverImagePath);
-  List<String> get galleryUrls => gallery.map(templatesUrl).whereType<String>().toList();
+  ImageProvider? get coverImage => catalogImage(coverImagePath);
+  List<ImageProvider> get galleryImages =>
+      gallery.map(catalogImage).whereType<ImageProvider>().toList();
 
   /// Trim size in cm from specs.trim_mm, e.g. "18.55 × 27.45 سم".
   String? get trimSizeLabel {
