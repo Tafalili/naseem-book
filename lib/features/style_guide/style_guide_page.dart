@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
+import '../../shared/widgets/privacy_badge.dart';
 
 /// Verifies the client can reach Supabase through the public RPC.
 final backendHealthProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -70,36 +71,6 @@ class _Hero extends StatelessWidget {
               style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400)),
           const SizedBox(height: NSpace.lg),
           const PrivacyBadge(),
-        ],
-      ),
-    );
-  }
-}
-
-class PrivacyBadge extends StatelessWidget {
-  const PrivacyBadge({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: NSpace.md, vertical: NSpace.sm),
-      decoration: BoxDecoration(
-        color: NColors.surface.withValues(alpha: .85),
-        borderRadius: const BorderRadius.all(NRadius.pill),
-        border: Border.all(color: NColors.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.lock_outline_rounded, size: 18, color: NColors.sageDark),
-          const SizedBox(width: NSpace.sm),
-          Flexible(
-            child: Text(
-              'صورك مشفرة ومحفوظة بشكل خاص، وتُحذف تلقائياً بعد طباعة كتابك',
-              style: t.labelMedium?.copyWith(color: NColors.sageDark),
-            ),
-          ),
         ],
       ),
     );
@@ -357,7 +328,7 @@ class _Components extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AspectRatio(
-                    aspectRatio: 185.5 / 274.5, // trim size
+                    aspectRatio: 186 / 276, // trim size
                     child: Container(
                       color: NColors.sandSoft,
                       alignment: Alignment.center,

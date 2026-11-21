@@ -13,7 +13,11 @@ lib/
   core/config/env.dart        # Supabase URL + publishable key (override with --dart-define)
   core/theme/                 # tokens (colors, spacing, radii), typography, ThemeData
   core/router/app_router.dart
-  features/style_guide/       # Phase 0 design-system sample page (/style)
+  data/                       # models + CatalogRepository (Riverpod providers)
+  features/home/              # storefront: hero slider, featured book, how-it-works, products, privacy
+  features/product/           # product page (/p/:slug)
+  features/shell/             # header + footer shell
+  features/style_guide/       # design-system sample page (/style)
 supabase/migrations/          # schema, RLS, storage buckets
 web/index.html                # RTL + Open Graph tags
 ```
@@ -31,4 +35,9 @@ flutter build web --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_PUBLISHA
 - Add the first owner: insert into `public.admins (user_id, role)` values (`<auth user id>`, `'owner'`).
 
 ## Roadmap
-0 Foundation ✓ · 1 Storefront · 2 Book editor · 3 Preview & cart · 4 Checkout & tracking · 5 Admin · 6 Print export · 7 Automation & launch
+Page 186×276 mm (no bleed), printed on A4 imposed like the source files; cover on A4 with 5 mm white stroke.
+
+0 Foundation ✓ · 1 Storefront ✓ · 2 Book editor · 3 Preview & cart · 4 Checkout & tracking · 5 Admin · 6 Print export · 7 Automation & launch
+
+## Deploy note
+Uses path URLs (`/p/naseem-classic`), so the host must rewrite unknown paths to `index.html` (SPA fallback).
