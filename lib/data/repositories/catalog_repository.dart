@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/page_template.dart';
 import '../models/product.dart';
 import '../models/promo_banner.dart';
 import '../models/public_settings.dart';
@@ -56,3 +57,14 @@ final bannersProvider =
 
 final publicSettingsProvider =
     FutureProvider((ref) => ref.watch(catalogRepositoryProvider).publicSettings());
+
+/// Page templates for a product, cover (page 0) first.
+final templatesProvider = FutureProvider.family<List<PageTemplate>, String>((ref, slug) async {
+  final db = Supabase.instance.client;
+  final rows = await db
+      .from('page_templates')
+      .select('${PageTemplate.columns},product:products!inner(slug)')
+      .eq('product.slug', slug)
+      .order('page_number');
+  return rows.map(PageTemplate.fromJson).toList();
+});
