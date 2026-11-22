@@ -459,3 +459,24 @@ class _CoverElementViewState extends ConsumerState<_CoverElementView> {
     );
   }
 }
+
+/// A read-only page scaled to fill its parent (cropping the few mm where the
+/// cover's aspect differs from the page's).
+class FittedPage extends StatelessWidget {
+  const FittedPage({super.key, required this.template, required this.draft});
+  final PageTemplate template;
+  final BookDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: template.widthMm * 4,
+        height: template.heightMm * 4,
+        child: PageCanvas(template: template, draft: draft),
+      ),
+    );
+  }
+}

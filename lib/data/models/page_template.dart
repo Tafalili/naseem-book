@@ -11,6 +11,8 @@ abstract final class BookGeometry {
 
 enum SlotShape { rect, rounded, ellipse }
 
+double _r(double v) => (v * 10).roundToDouble() / 10; // 0.1 mm
+
 class PhotoSlot {
   const PhotoSlot({
     required this.id,
@@ -26,6 +28,29 @@ class PhotoSlot {
   final String id;
   final double x, y, w, h, rotation, radius; // mm, degrees
   final SlotShape shape;
+
+  PhotoSlot copyWith({double? x, double? y, double? w, double? h, double? rotation, SlotShape? shape, double? radius}) =>
+      PhotoSlot(
+        id: id,
+        x: x ?? this.x,
+        y: y ?? this.y,
+        w: w ?? this.w,
+        h: h ?? this.h,
+        rotation: rotation ?? this.rotation,
+        shape: shape ?? this.shape,
+        radius: radius ?? this.radius,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'x': _r(x),
+        'y': _r(y),
+        'w': _r(w),
+        'h': _r(h),
+        if (rotation != 0) 'rotation': _r(rotation),
+        'shape': shape.name,
+        if (shape == SlotShape.rounded) 'radius': _r(radius),
+      };
 
   factory PhotoSlot.fromJson(Map<String, dynamic> j) => PhotoSlot(
         id: j['id'] as String,
@@ -59,6 +84,31 @@ class TextSlot {
   final TextKind kind;
   final int lines;
 
+  TextSlot copyWith({double? x, double? y, double? w, double? h, double? rotation, TextKind? kind, int? lines, double? fontSizeMm}) =>
+      TextSlot(
+        id: id,
+        x: x ?? this.x,
+        y: y ?? this.y,
+        w: w ?? this.w,
+        h: h ?? this.h,
+        rotation: rotation ?? this.rotation,
+        kind: kind ?? this.kind,
+        lines: lines ?? this.lines,
+        fontSizeMm: fontSizeMm ?? this.fontSizeMm,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'x': _r(x),
+        'y': _r(y),
+        'w': _r(w),
+        'h': _r(h),
+        if (rotation != 0) 'rotation': _r(rotation),
+        'kind': kind == TextKind.childName ? 'child_name' : 'memory',
+        'lines': lines,
+        'font_size_mm': _r(fontSizeMm),
+      };
+
   factory TextSlot.fromJson(Map<String, dynamic> j) => TextSlot(
         id: j['id'] as String,
         x: (j['x'] as num).toDouble(),
@@ -81,10 +131,13 @@ class PageTemplate {
     required this.photoSlots,
     required this.textSlots,
     required this.isCover,
+    this.printPath,
   });
 
   final String id;
   final int pageNumber; // 0 = cover
+  /// 300 DPI design in the private print-files bucket (admin only).
+  final String? printPath;
   final String title;
   final String? backgroundPath;
   final List<PhotoSlot> photoSlots;
@@ -109,5 +162,6 @@ class PageTemplate {
             .map((e) => TextSlot.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
         isCover: j['is_cover'] as bool? ?? false,
+        printPath: j['print_path'] as String?,
       );
 }
