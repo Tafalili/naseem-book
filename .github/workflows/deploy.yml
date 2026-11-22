@@ -25,7 +25,9 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release --no-web-resources-cdn --base-href /${{ github.event.repository.name }}/
+      - run: flutter build web --release --no-web-resources-cdn --base-href /
+      # Custom domain served from the site root.
+      - run: echo "tashahshop.com" > build/web/CNAME
       # Path URLs (/p/slug): serve the app for unknown paths too.
       - run: cp build/web/index.html build/web/404.html
       - uses: actions/upload-pages-artifact@v3
