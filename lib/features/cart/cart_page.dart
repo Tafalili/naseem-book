@@ -272,39 +272,42 @@ class _Extras extends ConsumerWidget {
             title: Text(Addon.giftWrap.label),
             subtitle: Text('${Addon.giftWrap.hint} · ${price(Addon.giftWrap)}'),
           ),
-          const Divider(color: NColors.line),
-          Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(Addon.extraCopy.label, style: t.bodyLarge),
-                Text('${Addon.extraCopy.hint} · ${price(Addon.extraCopy)} للنسخة', style: t.bodySmall),
-              ]),
-            ),
-            IconButton.outlined(
-              tooltip: 'إنقاص',
-              onPressed: item.extraCopies > 0
-                  ? () => cart.update(item.copyWith(extraCopies: item.extraCopies - 1))
-                  : null,
-              icon: const Icon(Icons.remove_rounded),
-            ),
-            SizedBox(
-              width: 36,
-              child: Text('${item.extraCopies}', textAlign: TextAlign.center, style: t.titleMedium),
-            ),
-            IconButton.outlined(
-              tooltip: 'زيادة',
-              onPressed: item.extraCopies < CartItem.maxExtraCopies
-                  ? () => cart.update(item.copyWith(extraCopies: item.extraCopies + 1))
-                  : null,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ]),
+          // Extra copies are offered only once the owner sets a price.
+          if (settings.priceOf(Addon.extraCopy) > 0) ...[
+            const Divider(color: NColors.line),
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(Addon.extraCopy.label, style: t.bodyLarge),
+                  Text('${Addon.extraCopy.hint} · ${price(Addon.extraCopy)} للنسخة', style: t.bodySmall),
+                ]),
+              ),
+              IconButton.outlined(
+                tooltip: 'إنقاص',
+                onPressed: item.extraCopies > 0
+                    ? () => cart.update(item.copyWith(extraCopies: item.extraCopies - 1))
+                    : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text('${item.extraCopies}', textAlign: TextAlign.center, style: t.titleMedium),
+              ),
+              IconButton.outlined(
+                tooltip: 'زيادة',
+                onPressed: item.extraCopies < CartItem.maxExtraCopies
+                    ? () => cart.update(item.copyWith(extraCopies: item.extraCopies + 1))
+                    : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ]),
+          ],
           if (draft.hasPrintedText ||
               draft.cover.mode == CoverMode.designer ||
               draft.cover.childName.trim().isNotEmpty ||
               photosLine != null) ...[
             const Divider(color: NColors.line),
-            if (draft.cover.childName.trim().isNotEmpty)
+            if (draft.cover.childName.trim().isNotEmpty && draft.cover.mode != CoverMode.designer)
               auto(Addon.childName, 'أُضيف لأنك كتبتِ اسم طفلك على الغلاف'),
             if (photosLine != null)
               auto(Addon.photos, 'أُضيف لأنك وضعتِ صوراً داخل الكتاب', line: photosLine),

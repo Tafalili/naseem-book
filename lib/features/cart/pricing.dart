@@ -39,7 +39,8 @@ Quote buildQuote({
   final filled = draft.placements.keys.where(slotIds.contains).length;
   return Quote([
     QuoteLine(product.title, product.basePrice),
-    if (draft.cover.childName.trim().isNotEmpty)
+    // One cover charge: «اتركه لذوقكم» already includes the name.
+    if (draft.cover.childName.trim().isNotEmpty && draft.cover.mode != CoverMode.designer)
       QuoteLine(Addon.childName.label, p(Addon.childName), auto: true),
     if (filled > 0)
       QuoteLine('${Addon.photos.label} ($filled من ${slotIds.length})',
