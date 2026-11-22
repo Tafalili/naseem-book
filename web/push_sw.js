@@ -5,17 +5,17 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'كتاب نسيم';
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
-    icon: '/icons/Icon-192.png',
-    badge: '/icons/Icon-192.png',
+    icon: 'icons/Icon-192.png',
+    badge: 'icons/Icon-192.png',
     lang: 'ar',
     dir: 'rtl',
-    data: { url: data.url || '/' },
+    data: { url: data.url || './' },
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  const url = new URL(event.notification.data?.url || './', self.registration.scope).href;
   event.waitUntil((async () => {
     const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {
