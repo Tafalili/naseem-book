@@ -6,6 +6,7 @@ import '../../core/format/money.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/page_template.dart';
+import '../../data/models/product.dart';
 import '../../data/models/public_settings.dart';
 import '../../data/repositories/catalog_repository.dart';
 import '../../shared/widgets/layout.dart';
@@ -42,6 +43,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   @override
   Widget build(BuildContext context) {
     final templates = ref.watch(templatesProvider(widget.slug));
+    final product = ref.watch(productBySlugProvider(widget.slug)).value;
     final draft = ref.watch(draftProvider.select((s) => s.draft));
 
     return Scaffold(
@@ -50,10 +52,14 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => LoadError(onRetry: () => ref.invalidate(templatesProvider(widget.slug))),
           data: (pages) {
-            if (draft == null || draft.bookId != widget.book || pages.isEmpty) {
+            if (draft == null || draft.bookId != widget.book || pages.isEmpty || product == null) {
               return const Center(child: CircularProgressIndicator());
             }
+            // books without cover options start at page 1
+            if (!product.coverCustom) pages = pages.where((p) => !p.isCover).toList();
             return _EditorBody(
+              textPrice: settingsPrice(ref, product),
+              productTitle: product.title,
               slug: widget.slug,
               book: widget.book,
               pages: pages,
@@ -72,6 +78,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 
 class _EditorBody extends ConsumerWidget {
   const _EditorBody({
+    required this.textPrice,
+    required this.productTitle,
     required this.slug,
     required this.book,
     required this.pages,
@@ -83,6 +91,8 @@ class _EditorBody extends ConsumerWidget {
   });
 
   final String slug, book;
+  final int textPrice;
+  final String productTitle;
   final List<PageTemplate> pages;
   final BookDraft draft;
   final int index;
@@ -128,8 +138,7 @@ class _EditorBody extends ConsumerWidget {
   }
 
   Future<void> _editText(BuildContext context, WidgetRef ref, TextSlot t) async {
-    final settings = ref.read(publicSettingsProvider).value;
-    final price = settings?.priceOf(Addon.printedText) ?? 0;
+    final price = textPrice;
     final c = TextEditingController(text: draft.texts[t.id] ?? '');
     final result = await showDialog<String>(
       context: context,
@@ -211,6 +220,7 @@ class _EditorBody extends ConsumerWidget {
           );
 
     final topBar = _TopBar(
+      title: productTitle,
       filled: filled,
       total: total,
       onBack: () => context.go(Routes.product(slug)),
@@ -313,7 +323,9 @@ class _TopBar extends StatelessWidget {
     required this.total,
     required this.onBack,
     required this.onPreview,
+    this.title = 'كتاب نسيم',
   });
+  final String title;
   final int filled, total;
   final VoidCallback onBack, onPreview;
 
@@ -331,7 +343,7 @@ class _TopBar extends StatelessWidget {
             icon: const Icon(Icons.arrow_back_rounded),
           ),
           Expanded(
-            child: Text('تصميم كتاب نسيم',
+            child: Text(title.startsWith('كتاب') ? 'تصميم $title' : 'تصميم كتاب $title',
                 style: (mobile ? t.titleMedium : t.titleLarge), overflow: TextOverflow.ellipsis),
           ),
           Container(
@@ -542,4 +554,9 @@ class _PagePanel extends StatelessWidget {
       ],
     );
   }
+}
+
+int settingsPrice(WidgetRef ref, Product product) {
+  final s = ref.watch(publicSettingsProvider).value;
+  return s == null ? 0 : product.priceOf(Addon.printedText, s);
 }

@@ -88,6 +88,10 @@ class _Details extends ConsumerWidget {
         ),
         const SizedBox(height: NSpace.md),
       ],
+      for (final i in order.items) ...[
+        _ItemCard(order: order, item: i),
+        const SizedBox(height: NSpace.md),
+      ],
       _HistoryCard(order: order),
     ];
 
@@ -462,6 +466,14 @@ class _PriceCard extends StatelessWidget {
       title: 'الحساب',
       child: Column(children: [
         for (final (i, l) in order.lines.indexed) ...[
+          if (l['item_no'] != null && (i == 0 || order.lines[i - 1]['item_no'] == null) && order.books.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: NSpace.sm),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text('المنتجات', style: t.labelLarge?.copyWith(color: NColors.sageDark)),
+              ),
+            ),
           if (order.books.length > 1 && l['key'] == 'book')
             Padding(
               padding: EdgeInsets.only(top: i == 0 ? 0 : NSpace.sm),
@@ -575,6 +587,56 @@ class _BookCard extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: NSpace.xs),
                 child: SelectableText('ص ${p.pageNumber}: ${e.value}', style: t.bodyMedium),
               ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _ItemCard extends ConsumerWidget {
+  const _ItemCard({required this.order, required this.item});
+  final AdminOrder order;
+  final AdminOrderItem item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final files = ref.watch(_filesProvider(order.row.id));
+    final urls = files.value?.photos ?? const {};
+    return AdminCard(
+      title: '${item.title} × ${item.qty}',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('${formatIqd(item.unit)} للوحدة · ${formatIqd(item.subtotal)}', style: t.bodySmall),
+        const SizedBox(height: NSpace.sm),
+        for (final (label, value) in item.texts)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: SelectableText('$label: $value', style: t.bodyMedium),
+          ),
+        if (item.photos.isNotEmpty) ...[
+          const SizedBox(height: NSpace.sm),
+          if (order.imagesPurgedAt != null)
+            Text('🔒 حُذفت الصور من السيرفر', style: t.bodyMedium)
+          else ...[
+            Text('الصور: ${item.photos.length}', style: t.titleSmall),
+            const SizedBox(height: NSpace.sm),
+            if (files.isLoading) const LinearProgressIndicator(),
+            Wrap(spacing: NSpace.sm, runSpacing: NSpace.sm, children: [
+              for (final path in item.photos)
+                SizedBox.square(
+                  dimension: 96,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(NRadius.sm),
+                    child: urls[path] == null
+                        ? const ColoredBox(color: NColors.surfaceAlt)
+                        : InkWell(
+                            onTap: () => web.window.open(urls[path]!, '_blank'),
+                            child: Image.network(urls[path]!, fit: BoxFit.cover),
+                          ),
+                  ),
+                ),
+            ]),
+          ],
         ],
       ]),
     );

@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models/page_template.dart';
-import '../cart/cart_page.dart' show CartBook;
+import '../cart/cart_page.dart' show CartBook, CartShopItem;
+import '../cart/shop_cart.dart';
+import '../../data/models/product.dart';
 import '../../data/repositories/order_repository.dart';
 import '../cart/cart_controller.dart';
 import '../editor/draft/book_draft.dart';
@@ -34,7 +36,8 @@ class CheckoutController extends Notifier<CheckoutState> {
   @override
   CheckoutState build() => const CheckoutState();
 
-  Future<String?> submit({required List<CartBook> books, required CustomerInfo customer}) async {
+  Future<String?> submit(
+      {required List<CartBook> books, List<CartShopItem> items = const [], required CustomerInfo customer}) async {
     final repo = ref.read(orderRepositoryProvider);
     state = const CheckoutState(busy: true, stage: 'نجهّز طلبك…');
     try {
@@ -44,6 +47,7 @@ class CheckoutController extends Notifier<CheckoutState> {
       // Photo ids are unique per device, so one map serves every book.
       final used = <String>{
         for (final b in books) ...b.draft.usedPhotoIds.where((id) => b.draft.photos.any((p) => p.id == id)),
+        for (final i in items) ...i.line.photoIds,
       }.toList();
 
       final paths = <String, String>{};
@@ -66,11 +70,15 @@ class CheckoutController extends Notifier<CheckoutState> {
         'address': customer.address,
         'notes': customer.notes,
         'books': [for (final b in books) _bookPayload(b, paths)],
+        'items': [for (final i in items) _itemPayload(i, paths)],
       });
 
       for (final b in books) {
         await ref.read(cartProvider.notifier).remove(b.item.book);
         await ref.read(draftProvider.notifier).discard(b.item.book);
+      }
+      for (final i in items) {
+        await ref.read(shopCartProvider.notifier).remove(i.line.id);
       }
       await rememberOrder(res.code);
       state = const CheckoutState();
@@ -129,6 +137,18 @@ Map<String, dynamic> _bookPayload(CartBook b, Map<String, String> paths) {
     'pages': pagePayload,
   };
 }
+
+Map<String, dynamic> _itemPayload(CartShopItem i, Map<String, String> paths) => {
+      'product_slug': i.product.slug,
+      'qty': i.line.qty,
+      'fields': {
+        for (final f in i.product.options.fields)
+          if (f.type == FieldType.photos && (i.line.photos[f.id]?.isNotEmpty ?? false))
+            f.id: [for (final id in i.line.photos[f.id]!) paths[id]!]
+          else if (f.type != FieldType.photos && (i.line.texts[f.id] ?? '').trim().isNotEmpty)
+            f.id: i.line.texts[f.id]!.trim(),
+      },
+    };
 
 final checkoutProvider = NotifierProvider<CheckoutController, CheckoutState>(CheckoutController.new);
 

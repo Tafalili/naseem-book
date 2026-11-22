@@ -11,10 +11,13 @@ import '../../data/repositories/catalog_repository.dart';
 import '../../shared/widgets/book_mock.dart';
 import '../../shared/widgets/layout.dart';
 import '../../shared/widgets/privacy_badge.dart';
+import 'item_form.dart';
 
 class ProductPage extends ConsumerWidget {
-  const ProductPage({super.key, required this.slug});
+  const ProductPage({super.key, required this.slug, this.lineId});
   final String slug;
+  /// Cart line of a shop item being edited.
+  final String? lineId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,7 +28,7 @@ class ProductPage extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (_, _) => LoadError(onRetry: () => ref.invalidate(productBySlugProvider(slug))),
-      data: (p) => p == null ? const _NotFound() : _ProductView(product: p),
+      data: (p) => p == null ? const _NotFound() : _ProductView(product: p, lineId: lineId),
     );
   }
 }
@@ -47,8 +50,9 @@ class _NotFound extends StatelessWidget {
 }
 
 class _ProductView extends ConsumerStatefulWidget {
-  const _ProductView({required this.product});
+  const _ProductView({required this.product, this.lineId});
   final Product product;
+  final String? lineId;
 
   @override
   ConsumerState<_ProductView> createState() => _ProductViewState();
@@ -122,12 +126,12 @@ class _ProductViewState extends ConsumerState<_ProductView> {
           if (mobile) ...[
             gallery,
             const SizedBox(height: NSpace.xl),
-            _Details(product: p),
+            _Details(product: p, lineId: widget.lineId),
           ] else
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 5, child: _Details(product: p)),
+                Expanded(flex: 5, child: _Details(product: p, lineId: widget.lineId)),
                 const SizedBox(width: NSpace.xxl),
                 Expanded(flex: 5, child: gallery),
               ],
@@ -166,14 +170,16 @@ class _Breadcrumb extends StatelessWidget {
 }
 
 class _Details extends ConsumerWidget {
-  const _Details({required this.product});
+  const _Details({required this.product, this.lineId});
   final Product product;
+  final String? lineId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
     final settings = ref.watch(publicSettingsProvider).value;
     final p = product;
+    if (p.isItem) return _ItemDetails(product: p, lineId: lineId);
     final specs = <(String, String)>[
       ('عدد الصفحات', '${p.pageCount} صفحة'),
       ('عدد الصور', 'حتى ${p.photoCapacity} صورة'),
@@ -237,6 +243,7 @@ class _Details extends ConsumerWidget {
         Text('من لا تختار أي إضافة تدفع سعر الكتاب فقط', style: t.bodySmall),
         const SizedBox(height: NSpace.sm),
         for (final a in Addon.values)
+          if (p.coverCustom || (a != Addon.childName && a != Addon.designerCover))
           Padding(
             padding: const EdgeInsets.only(bottom: NSpace.sm),
             child: Container(
@@ -261,13 +268,56 @@ class _Details extends ConsumerWidget {
                   Text(
                     settings == null
                         ? '…'
-                        : (settings.priceOf(a) > 0 ? '+ ${formatIqd(settings.priceOf(a))}' : 'قريباً'),
+                        : (p.priceOf(a, settings) > 0 ? '+ ${formatIqd(p.priceOf(a, settings))}' : 'قريباً'),
                     style: t.labelLarge?.copyWith(color: NColors.sageDark),
                   ),
                 ],
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _ItemDetails extends ConsumerWidget {
+  const _ItemDetails({required this.product, this.lineId});
+  final Product product;
+  final String? lineId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final p = product;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (p.badge != null)
+          Text(p.badge!, style: t.labelMedium?.copyWith(color: const Color(0xFF9A6A48))),
+        Text(p.title, style: t.displaySmall),
+        if (p.tagline != null) ...[
+          const SizedBox(height: NSpace.xs),
+          Text(p.tagline!, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w400)),
+        ],
+        const SizedBox(height: NSpace.md),
+        Text.rich(TextSpan(children: [
+          TextSpan(text: priceOrSoon(p.basePrice), style: t.headlineMedium?.copyWith(color: NColors.sageDark)),
+          if (p.options.minQty > 1 || p.options.unitLabel == 'قطعة')
+            TextSpan(text: '  لل${p.options.unitLabel}', style: t.titleSmall?.copyWith(color: NColors.inkMuted)),
+        ])),
+        if (p.description != null) ...[
+          const SizedBox(height: NSpace.md),
+          Text(p.description!, style: t.bodyLarge),
+        ],
+        const SizedBox(height: NSpace.lg),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(NSpace.md),
+            child: ItemOrderForm(product: p, lineId: lineId),
+          ),
+        ),
+        const SizedBox(height: NSpace.md),
+        const PrivacyBadge(dense: true),
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../data/models/order.dart';
 import '../../../data/models/page_template.dart';
+import '../../../data/models/product.dart';
 
 /// A message ready to show in the admin UI.
 class AdminFailure implements Exception {
@@ -47,6 +48,7 @@ class AdminOrderRow {
     required this.createdAt,
     required this.hasReceipt,
     this.bookCount = 1,
+    this.itemCount = 0,
   });
 
   final String id, code, customerName, phone, city;
@@ -56,9 +58,10 @@ class AdminOrderRow {
   final DateTime createdAt;
   final bool hasReceipt;
   final int bookCount;
+  final int itemCount;
 
   static const columns =
-      'id,order_code,status,customer_name,phone,city,child_name,total,deposit_amount,created_at,receipt_path,book_count';
+      'id,order_code,status,customer_name,phone,city,child_name,total,deposit_amount,created_at,receipt_path,book_count,item_count';
 
   factory AdminOrderRow.fromJson(Map<String, dynamic> j) => AdminOrderRow(
         id: j['id'] as String,
@@ -73,6 +76,7 @@ class AdminOrderRow {
         createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
         hasReceipt: j['receipt_path'] != null,
         bookCount: (j['book_count'] as num?)?.toInt() ?? 1,
+        itemCount: (j['item_count'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -114,12 +118,51 @@ class AdminBook {
   String get childName => ((cover['child_name'] as String?) ?? '').trim();
 }
 
+/// One shop item of an order (frame, cards...), with what the customer filled in.
+class AdminOrderItem {
+  const AdminOrderItem({
+    required this.no,
+    required this.productId,
+    required this.title,
+    required this.qty,
+    required this.unit,
+    required this.subtotal,
+    required this.fields,
+    required this.photos,
+    required this.fieldDefs,
+  });
+  final int no;
+  final String productId, title;
+  final int qty, unit, subtotal;
+  final Map<String, dynamic> fields; // field id -> text, or list of photo paths
+  final List<String> photos;
+  final List<ItemField> fieldDefs; // the product's current fields (for labels)
+
+  String labelOf(String id) => fieldDefs.where((f) => f.id == id).firstOrNull?.label ?? id;
+
+  /// Text fields in the product's order, then any the product no longer has.
+  List<(String, String)> get texts {
+    final out = <(String, String)>[];
+    final seen = <String>{};
+    for (final f in fieldDefs) {
+      final v = fields[f.id];
+      if (v is String) out.add((f.label, v));
+      seen.add(f.id);
+    }
+    fields.forEach((k, v) {
+      if (!seen.contains(k) && v is String) out.add((k, v));
+    });
+    return out;
+  }
+}
+
 class AdminOrder {
   AdminOrder({
     required this.row,
     required this.address,
     required this.notes,
     required this.books,
+    this.items = const [],
     required this.lines,
     required this.receiptPath,
     required this.printedAt,
@@ -131,6 +174,7 @@ class AdminOrder {
   final String address;
   final String? notes;
   final List<AdminBook> books;
+  final List<AdminOrderItem> items;
   final List<Map<String, dynamic>> lines; // price_snapshot.lines (each has book_no on multi-book orders)
   final String? receiptPath;
   final DateTime? printedAt, imagesPurgedAt;
@@ -144,6 +188,9 @@ class AdminOrder {
       }
       final el = b.cover['element'];
       if (el is Map && el['photo_path'] is String) yield el['photo_path'] as String;
+    }
+    for (final i in items) {
+      yield* i.photos;
     }
   }
 }
@@ -178,9 +225,10 @@ class Settings {
 }
 
 class AdminProduct {
-  const AdminProduct({required this.id, required this.slug, required this.title, required this.basePrice});
+  const AdminProduct({required this.id, required this.slug, required this.title, required this.basePrice, this.kind = 'book'});
   final String id, slug, title;
   final int basePrice;
+  final String kind;
 }
 
 class AdminRepository {
@@ -266,6 +314,11 @@ class AdminRepository {
         .select('book_no,product_id,cover_mode,cover_config,gift_wrap,subtotal')
         .eq('order_id', id)
         .order('book_no');
+    final itemRows = await _db
+        .from('order_items')
+        .select('item_no,product_id,qty,unit,subtotal,fields,photos,product:products(title,options)')
+        .eq('order_id', id)
+        .order('item_no');
     final hist = await _db.from('order_status_history').select('to_status,note,at').eq('order_id', id).order('at');
     DateTime? dt(Object? v) => v == null ? null : DateTime.parse(v as String).toLocal();
     final pages = pageRows
@@ -283,7 +336,9 @@ class AdminRepository {
             ))
         .toList();
     Map<String, dynamic> map(Object? v) => Map<String, dynamic>.from((v as Map?) ?? const {});
-    final books = bookRows.isEmpty
+    final books = bookRows.isEmpty && ((o['book_count'] as num?)?.toInt() ?? 1) == 0
+        ? <AdminBook>[]
+        : bookRows.isEmpty
         // orders placed before multi-book orders: one book on the order row
         ? [
             AdminBook(
@@ -313,6 +368,20 @@ class AdminRepository {
       address: (o['address'] as String?) ?? '',
       notes: o['notes'] as String?,
       books: books,
+      items: [
+        for (final r in itemRows)
+          AdminOrderItem(
+            no: (r['item_no'] as num).toInt(),
+            productId: r['product_id'] as String,
+            title: ((r['product'] as Map?)?['title'] as String?) ?? '',
+            qty: (r['qty'] as num).toInt(),
+            unit: (r['unit'] as num).toInt(),
+            subtotal: (r['subtotal'] as num).toInt(),
+            fields: map(r['fields']),
+            photos: ((r['photos'] as List?) ?? const []).whereType<String>().toList(),
+            fieldDefs: ItemOptions.fromJson(map((r['product'] as Map?)?['options'])).fields,
+          ),
+      ],
       lines: (((o['price_snapshot'] as Map?)?['lines'] as List?) ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
@@ -361,15 +430,48 @@ class AdminRepository {
   }
 
   Future<List<AdminProduct>> products() async {
-    final rows = await _db.from('products').select('id,slug,title,base_price').order('sort_order');
+    final rows = await _db.from('products').select('id,slug,title,base_price,kind').order('sort_order');
     return rows
         .map((r) => AdminProduct(
               id: r['id'] as String,
               slug: r['slug'] as String,
               title: r['title'] as String,
               basePrice: (r['base_price'] as num?)?.toInt() ?? 0,
+              kind: (r['kind'] as String?) ?? 'book',
             ))
         .toList();
+  }
+
+  // ---------- shop products ----------
+  /// Shop items, inactive ones included (admins see every product).
+  Future<List<(Product, bool)>> shopProducts() async {
+    final rows = await _db
+        .from('products')
+        .select('${Product.columns},is_active,sort_order')
+        .eq('kind', 'item')
+        .order('sort_order');
+    return [for (final r in rows) (Product.fromJson(r), r['is_active'] == true)];
+  }
+
+  Future<void> saveProduct(String? id, Map<String, dynamic> row) async {
+    try {
+      if (id == null) {
+        await _db.from('products').insert({...row, 'kind': 'item', 'page_count': 1, 'photo_capacity': 1});
+      } else {
+        await _db.from('products').update(row).eq('id', id);
+      }
+    } on PostgrestException catch (e) {
+      throw AdminFailure(e.code == '23505' ? 'الرابط المختصر مستخدم لمنتج آخر.' : 'تعذّر حفظ المنتج. حاول مجدداً.');
+    }
+  }
+
+  /// Uploads a product photo to the public templates bucket; returns its path.
+  Future<String> uploadProductImage(String slug, Uint8List bytes, String contentType) async {
+    final ext = contentType.contains('png') ? 'png' : contentType.contains('webp') ? 'webp' : 'jpg';
+    final path = 'shop/$slug-${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _db.storage.from('templates').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: contentType, upsert: false, cacheControl: '31536000'));
+    return path;
   }
 
   Future<void> setBasePrice(String productId, int price) =>

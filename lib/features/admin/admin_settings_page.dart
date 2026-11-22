@@ -10,7 +10,8 @@ import 'admin_shell.dart';
 import 'data/admin_repository.dart';
 
 final _settingsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRepositoryProvider).settings());
-final _productsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRepositoryProvider).products());
+final _productsProvider = FutureProvider.autoDispose(
+    (ref) async => (await ref.watch(adminRepositoryProvider).products()).where((p) => p.kind == 'book').toList());
 final _teamProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRepositoryProvider).team());
 
 const _priceKeys = [

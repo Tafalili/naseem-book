@@ -17,26 +17,50 @@ final _productsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRep
 
 /// Admin template editor: draw photo frames and text lines on each page.
 /// Coordinates are stored in millimetres on the page (0,0 = top-left).
-class TemplateEditorPage extends ConsumerWidget {
+class TemplateEditorPage extends ConsumerStatefulWidget {
   const TemplateEditorPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TemplateEditorPage> createState() => _TemplateEditorPageState();
+}
+
+class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
+  String? _slug;
+
+  @override
+  Widget build(BuildContext context) {
     final products = ref.watch(_productsProvider);
     return products.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => Center(
           child: TextButton(
               onPressed: () => ref.invalidate(_productsProvider), child: const Text('تعذّر التحميل. إعادة المحاولة'))),
-      data: (list) => list.isEmpty
-          ? const Center(child: Text('لا توجد منتجات.'))
-          : _ProductTemplates(slug: list.first.slug),
+      data: (all) {
+        final list = all.where((p) => p.kind == 'book').toList();
+        if (list.isEmpty) return const Center(child: Text('لا توجد منتجات.'));
+        final slug = list.any((p) => p.slug == _slug) ? _slug! : list.first.slug;
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (list.length > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(NSpace.md, NSpace.sm, NSpace.md, 0),
+              child: Wrap(spacing: NSpace.sm, children: [
+                for (final p in list)
+                  ChoiceChip(
+                    label: Text(p.title),
+                    selected: p.slug == slug,
+                    onSelected: (_) => setState(() => _slug = p.slug),
+                  ),
+              ]),
+            ),
+          Expanded(child: _ProductTemplates(key: ValueKey(slug), slug: slug)),
+        ]);
+      },
     );
   }
 }
 
 class _ProductTemplates extends ConsumerWidget {
-  const _ProductTemplates({required this.slug});
+  const _ProductTemplates({super.key, required this.slug});
   final String slug;
 
   @override

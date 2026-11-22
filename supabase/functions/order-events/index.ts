@@ -47,8 +47,9 @@ type Order = {
   status: string;
   receipt_path: string | null;
   notes: string | null;
-  addons: { key: string; qty: number; free?: boolean }[];
+  addons: { key: string; qty: number; free?: boolean; item_no?: number }[];
   book_count: number | null;
+  item_count: number | null;
 };
 
 Deno.serve(async (req) => {
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
   const { data: o } = await db
     .from("orders")
     .select(
-      "id,order_code,customer_name,phone,city,address,child_name,cover_mode,total,deposit_amount,status,receipt_path,notes,addons,book_count",
+      "id,order_code,customer_name,phone,city,address,child_name,cover_mode,total,deposit_amount,status,receipt_path,notes,addons,book_count,item_count",
     )
     .eq("id", order_id)
     .maybeSingle<Order>();
@@ -93,7 +94,10 @@ async function notifyOwner(
   const out: Record<string, string> = {};
   // multi-book orders repeat add-ons per book: count them, mark the free covers
   const counts = new Map<string, number>();
-  for (const a of o.addons ?? []) {
+  // shop items (frames, cards...) are stored as lines keyed by the product title
+  const items = (o.addons ?? []).filter((a) => a.item_no != null)
+    .map((a) => (a.qty > 1 ? `${a.key} × ${a.qty}` : a.key)).join("، ");
+  for (const a of (o.addons ?? []).filter((a) => a.item_no == null)) {
     const label = (ADDONS[a.key] ?? a.key) + (a.free ? " (مجاناً)" : "");
     counts.set(label, (counts.get(label) ?? 0) + (a.qty ?? 1));
   }
@@ -110,13 +114,16 @@ async function notifyOwner(
     const rows: [string, string][] = isNew
       ? [
         ...(books > 1 ? [["عدد الكتب", String(books)] as [string, string]] : []),
-        [books > 1 ? "الأطفال" : "الطفل", o.child_name || "بدون اسم على الغلاف"],
+        ...(books > 0
+          ? [[books > 1 ? "الأطفال" : "الطفل", o.child_name || "بدون اسم على الغلاف"] as [string, string]]
+          : []),
+        ...(items ? [["المنتجات", items] as [string, string]] : []),
         ["الزبون", `${o.customer_name} · ${o.phone}`],
         ["العنوان", `${o.city} · ${o.address}`],
-        ...(books > 1
+        ...(books !== 1
           ? []
           : [["الغلاف", o.cover_mode === "designer" ? "من تصميمنا" : "من تصميم الزبون"] as [string, string]]),
-        ["الإضافات", addons || "لا توجد"],
+        ...(books > 0 ? [["الإضافات", addons || "لا توجد"] as [string, string]] : []),
         ["الإجمالي", iqd(o.total)],
         ["العربون", iqd(o.deposit_amount)],
         ...(o.notes ? [["ملاحظات", o.notes] as [string, string]] : []),

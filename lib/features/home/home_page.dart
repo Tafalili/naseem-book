@@ -77,7 +77,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           error: (_, _) => LoadError(onRetry: () => ref.invalidate(productsProvider)),
           data: (list) {
-            final featured = list.where((p) => p.isFeatured).firstOrNull ?? list.firstOrNull;
+            final books = list.where((p) => !p.isItem).toList();
+            final items = list.where((p) => p.isItem).toList();
+            final featured = books.where((p) => p.isFeatured).firstOrNull ?? books.firstOrNull;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -92,9 +94,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SectionHeader(
-                          title: 'منتجاتنا', subtitle: 'كل كتاب يُطبع ويُجلَّد يدوياً بعناية'),
+                          title: 'كتبنا', subtitle: 'كل كتاب يُطبع ويُجلَّد يدوياً بعناية'),
                       const SizedBox(height: NSpace.lg),
-                      _ProductGrid(products: list),
+                      _ProductGrid(products: books),
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: NSpace.xxl),
+                        const SectionHeader(
+                            title: 'هدايا وتوزيعات', subtitle: 'تُطلب مع الكتاب في نفس السلة، أو وحدها'),
+                        const SizedBox(height: NSpace.lg),
+                        _ProductGrid(products: items),
+                      ],
                     ],
                   ),
                 ),
@@ -365,12 +374,22 @@ class ProductCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Container(
-                  height: 280,
-                  color: NColors.sandSoft,
-                  padding: const EdgeInsets.symmetric(vertical: NSpace.lg),
-                  child: Center(child: BookMock(image: product.coverImage, tilt: false)),
-                ),
+                if (product.isItem)
+                  Container(
+                    height: 280,
+                    width: double.infinity,
+                    color: NColors.sandSoft,
+                    child: product.coverImage == null
+                        ? null
+                        : Image(image: product.coverImage!, fit: BoxFit.cover),
+                  )
+                else
+                  Container(
+                    height: 280,
+                    color: NColors.sandSoft,
+                    padding: const EdgeInsets.symmetric(vertical: NSpace.lg),
+                    child: Center(child: BookMock(image: product.coverImage, tilt: false)),
+                  ),
                 if (product.badge != null)
                   PositionedDirectional(
                     top: NSpace.md,
@@ -392,13 +411,18 @@ class ProductCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(product.title, style: t.titleMedium),
-                  Text('${product.pageCount} صفحة · ${product.photoCapacity} صورة',
+                  Text(
+                      product.isItem
+                          ? (product.tagline ?? '')
+                          : '${product.pageCount} صفحة · ${product.photoCapacity} صورة',
                       style: t.bodySmall),
                   const SizedBox(height: NSpace.sm),
                   Row(
                     children: [
                       Text(priceOrSoon(product.basePrice),
                           style: t.titleLarge?.copyWith(color: NColors.sageDark)),
+                      if (product.isItem && product.options.minQty > 1)
+                        Text('  للقطعة', style: t.bodySmall),
                       const Spacer(),
                       const Icon(Icons.arrow_forward_rounded, color: NColors.sage),
                     ],
