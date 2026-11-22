@@ -96,3 +96,6 @@ Future<web.Blob> _toJpeg(web.HTMLCanvasElement canvas, double quality) {
 /// Reads a Blob (or File) into memory.
 Future<Uint8List> blobBytes(web.Blob b) async =>
     (await b.arrayBuffer().toDart).toDart.asUint8List();
+
+/// Encodes a canvas as JPEG with the browser's encoder.
+Future<web.Blob> canvasToJpeg(web.HTMLCanvasElement canvas, double quality) => _toJpeg(canvas, quality);

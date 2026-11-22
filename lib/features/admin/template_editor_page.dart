@@ -11,6 +11,7 @@ import '../../data/storage_urls.dart';
 import '../editor/draft/image_tools.dart';
 import 'admin_shell.dart';
 import 'data/admin_repository.dart';
+import 'print/print_files_dialog.dart';
 
 final _productsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRepositoryProvider).products());
 
@@ -256,6 +257,11 @@ class _EditorState extends ConsumerState<_Editor> {
         onPressed: _busy ? null : _uploadBackground,
         icon: const Icon(Icons.upload_file_rounded),
         label: const Text('تصميم الصفحة'),
+      ),
+      OutlinedButton.icon(
+        onPressed: () => showPrintFilesDialog(context, widget.slug),
+        icon: const Icon(Icons.print_outlined),
+        label: const Text('ملفات الطباعة'),
       ),
       FilterChip(
         label: const Text('إظهار التصميم'),

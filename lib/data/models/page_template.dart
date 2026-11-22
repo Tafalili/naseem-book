@@ -131,10 +131,13 @@ class PageTemplate {
     required this.photoSlots,
     required this.textSlots,
     required this.isCover,
+    this.printPath,
   });
 
   final String id;
   final int pageNumber; // 0 = cover
+  /// 300 DPI design in the private print-files bucket (admin only).
+  final String? printPath;
   final String title;
   final String? backgroundPath;
   final List<PhotoSlot> photoSlots;
@@ -159,5 +162,6 @@ class PageTemplate {
             .map((e) => TextSlot.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
         isCover: j['is_cover'] as bool? ?? false,
+        printPath: j['print_path'] as String?,
       );
 }
