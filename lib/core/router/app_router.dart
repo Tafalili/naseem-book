@@ -16,7 +16,7 @@ import '../../features/style_guide/style_guide_page.dart';
 abstract final class Routes {
   static const home = '/';
   static const styleGuide = '/style';
-  static String product(String slug) => '/p/$slug';
+  static String product(String slug, {String? line}) => line == null ? '/p/$slug' : '/p/$slug?line=$line';
   /// [book] is a book id: the product slug, or `slug~suffix` for another child.
   static String editor(String book) => '/design/$book';
   static String preview(String book) => '/design/$book/preview';
@@ -41,7 +41,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/p/:slug',
             pageBuilder: (_, s) => NoTransitionPage(
-              child: ProductPage(slug: s.pathParameters['slug']!),
+              child: ProductPage(slug: s.pathParameters['slug']!, lineId: s.uri.queryParameters['line']),
             ),
           ),
           GoRoute(
@@ -83,6 +83,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: 'orders/:id',
             pageBuilder: (_, s) =>
                 NoTransitionPage(child: _AdminLoader(location: s.uri.path, orderId: s.pathParameters['id'])),
+          ),
+          GoRoute(
+            path: 'products',
+            pageBuilder: (_, s) => NoTransitionPage(child: _AdminLoader(location: s.uri.path)),
           ),
           GoRoute(
             path: 'templates',

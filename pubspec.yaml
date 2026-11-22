@@ -29,7 +29,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/catalog/naseem-classic/
+    - assets/catalog/shop/
     - assets/templates/naseem-classic/
+    - assets/templates/friends-book/
+    - assets/catalog/friends-book/
   fonts:
     - family: IBMPlexSansArabic
       fonts:

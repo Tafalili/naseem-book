@@ -12,6 +12,7 @@ abstract final class AdminRoutes {
   static const orders = '/admin';
   static String order(String id) => '/admin/orders/$id';
   static const templates = '/admin/templates';
+  static const products = '/admin/products';
   static const settings = '/admin/settings';
 }
 
@@ -40,13 +41,15 @@ class _Frame extends ConsumerWidget {
 
   static const _items = [
     (AdminRoutes.orders, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'الطلبات'),
+    (AdminRoutes.products, Icons.storefront_outlined, Icons.storefront_rounded, 'المنتجات'),
     (AdminRoutes.templates, Icons.dashboard_customize_outlined, Icons.dashboard_customize_rounded, 'القوالب'),
     (AdminRoutes.settings, Icons.tune_outlined, Icons.tune_rounded, 'الإعدادات'),
   ];
 
   int get _index {
-    if (location.startsWith(AdminRoutes.templates)) return 1;
-    if (location.startsWith(AdminRoutes.settings)) return 2;
+    if (location.startsWith(AdminRoutes.products)) return 1;
+    if (location.startsWith(AdminRoutes.templates)) return 2;
+    if (location.startsWith(AdminRoutes.settings)) return 3;
     return 0;
   }
 

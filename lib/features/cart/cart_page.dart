@@ -17,6 +17,8 @@ import '../editor/draft/readiness.dart';
 import '../editor/widgets/page_canvas.dart';
 import 'cart_controller.dart';
 import 'pricing.dart';
+import 'shop_cart.dart';
+import '../product/item_form.dart' show ShopPhotoThumb;
 
 class CartPage extends ConsumerWidget {
   const CartPage({super.key});
@@ -24,6 +26,7 @@ class CartPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(cartProvider);
+    final shop = ref.watch(shopCartProvider);
     final t = Theme.of(context).textTheme;
     return ContentWidth(
       vertical: NSpace.xl,
@@ -32,7 +35,7 @@ class CartPage extends ConsumerWidget {
         children: [
           Text('سلتك', style: t.headlineMedium),
           const SizedBox(height: NSpace.lg),
-          if (items.isEmpty) const _Empty() else _CartBody(items: items),
+          if (items.isEmpty && shop.isEmpty) const _Empty() else _CartBody(items: items, shop: shop),
         ],
       ),
     );
@@ -70,7 +73,35 @@ List<CartBook>? watchCartBooks(WidgetRef ref, List<CartItem> items) {
   return loading ? null : out;
 }
 
-OrderQuote quoteCart(List<CartBook> books, PublicSettings settings) => OrderQuote([
+/// A shop item in the cart, with its product loaded.
+class CartShopItem {
+  const CartShopItem({required this.line, required this.product});
+  final ShopLine line;
+  final Product product;
+}
+
+/// Loads the products of the shop lines. Null while loading; throws on load errors.
+List<CartShopItem>? watchShopItems(WidgetRef ref, List<ShopLine> lines) {
+  final out = <CartShopItem>[];
+  var loading = false;
+  for (final l in lines) {
+    final product = ref.watch(productBySlugProvider(l.slug));
+    if (product.hasError) throw product.error!;
+    if (!product.hasValue) {
+      loading = true;
+      continue;
+    }
+    final p = product.value;
+    if (p == null || !p.isItem) continue; // withdrawn
+    out.add(CartShopItem(line: l, product: p));
+  }
+  return loading ? null : out;
+}
+
+QuoteLine itemQuoteLine(CartShopItem i) => QuoteLine(i.product.title, i.product.basePrice, qty: i.line.qty);
+
+OrderQuote quoteCart(List<CartBook> books, PublicSettings settings, {List<CartShopItem> items = const []}) =>
+    OrderQuote([
       for (final b in books)
         buildQuote(
           product: b.product,
@@ -80,7 +111,7 @@ OrderQuote quoteCart(List<CartBook> books, PublicSettings settings) => OrderQuot
           pages: b.pages,
           multiBook: books.length > 1,
         ),
-    ], settings);
+    ], settings, items: [for (final i in items) itemQuoteLine(i)]);
 
 String bookTitle(CartBook b, int index) {
   final name = b.draft.cover.childName.trim();
@@ -88,10 +119,14 @@ String bookTitle(CartBook b, int index) {
 }
 
 class _CartBody extends ConsumerWidget {
-  const _CartBody({required this.items});
+  const _CartBody({required this.items, required this.shop});
   final List<CartItem> items;
+  final List<ShopLine> shop;
 
   void _retry(WidgetRef ref) {
+    for (final l in shop) {
+      ref.invalidate(productBySlugProvider(l.slug));
+    }
     for (final it in items) {
       ref.invalidate(savedDraftProvider(it.book));
       ref.invalidate(templatesProvider(it.slug));
@@ -104,20 +139,22 @@ class _CartBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(publicSettingsProvider);
     List<CartBook>? books;
+    List<CartShopItem>? shopItems;
     try {
       books = watchCartBooks(ref, items);
+      shopItems = watchShopItems(ref, shop);
       if (settings.hasError) throw settings.error!;
     } catch (_) {
       return LoadError(onRetry: () => _retry(ref));
     }
-    if (books == null || !settings.hasValue) {
+    if (books == null || shopItems == null || !settings.hasValue) {
       return const Padding(
         padding: EdgeInsets.all(NSpace.xxl),
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (books.isEmpty) return const _Empty();
-    final quote = quoteCart(books, settings.value!);
+    if (books.isEmpty && shopItems.isEmpty) return const _Empty();
+    final quote = quoteCart(books, settings.value!, items: shopItems);
 
     final left = Column(children: [
       for (var i = 0; i < books.length; i++) ...[
@@ -126,9 +163,20 @@ class _CartBody extends ConsumerWidget {
         _Extras(book: books[i], settings: settings.value!, quote: quote.books[i]),
         const SizedBox(height: NSpace.lg),
       ],
-      _AddChild(slug: books.first.product.slug, settings: settings.value!, count: books.length),
+      if (books.any((b) => b.product.coverCustom))
+        _AddChild(
+            product: books.firstWhere((b) => b.product.coverCustom).product,
+            settings: settings.value!,
+            count: books.length),
+      if (shopItems.isNotEmpty) ...[
+        if (books.isNotEmpty) const SizedBox(height: NSpace.lg),
+        for (final i in shopItems) ...[
+          _ShopItemCard(item: i),
+          const SizedBox(height: NSpace.md),
+        ],
+      ],
     ]);
-    final right = _Summary(quote: quote, books: books);
+    final right = _Summary(quote: quote, books: books, items: shopItems);
 
     if (MediaQuery.sizeOf(context).width >= 1000) {
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -143,8 +191,8 @@ class _CartBody extends ConsumerWidget {
 
 /// Starts another book (another child) of the same product.
 class _AddChild extends ConsumerWidget {
-  const _AddChild({required this.slug, required this.settings, required this.count});
-  final String slug;
+  const _AddChild({required this.product, required this.settings, required this.count});
+  final Product product;
   final PublicSettings settings;
   final int count;
 
@@ -152,7 +200,7 @@ class _AddChild extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
     if (count >= CartController.maxBooks) return const SizedBox.shrink();
-    final save = settings.priceOf(Addon.childName);
+    final save = product.coverCustom ? product.priceOf(Addon.childName, settings) : 0;
     return Container(
       padding: const EdgeInsets.all(NSpace.md),
       decoration: BoxDecoration(
@@ -170,7 +218,7 @@ class _AddChild extends ConsumerWidget {
               style: t.bodySmall),
         ]);
         final button = FilledButton.tonalIcon(
-          onPressed: () => context.go(Routes.editor(newBookId(slug))),
+          onPressed: () => context.go(Routes.editor(newBookId(product.slug))),
           icon: const Icon(Icons.add_rounded, size: 18),
           label: const Text('كتاب لطفل آخر'),
         );
@@ -211,7 +259,7 @@ class _Empty extends StatelessWidget {
         const SizedBox(height: NSpace.md),
         Text('سلتك فارغة', style: t.titleLarge),
         const SizedBox(height: NSpace.xs),
-        Text('صمّمي كتاب طفلك أولاً، ثم أضيفيه إلى السلة من شاشة المعاينة.',
+        Text('صمّمي كتاب طفلك أو اختاري من منتجاتنا وأضيفيها إلى السلة.',
             textAlign: TextAlign.center, style: t.bodyMedium),
         const SizedBox(height: NSpace.lg),
         FilledButton(
@@ -242,7 +290,7 @@ class _BookCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
-    final ready = Readiness.of(draft, pages);
+    final ready = Readiness.of(draft, pages, needsName: product.coverCustom);
     final cover = pages.firstWhere((e) => e.isCover);
     final name = draft.cover.childName.trim();
     final mobile = isMobile(context);
@@ -255,8 +303,9 @@ class _BookCard extends ConsumerWidget {
         const SizedBox(height: NSpace.sm),
         Text('${product.pageCount} صفحة · ${ready.totalSlots - ready.emptySlots} من ${ready.totalSlots} صورة',
             style: t.bodyMedium),
-        Text(draft.cover.mode == CoverMode.designer ? 'الغلاف: نصممه لكِ' : 'الغلاف: من تصميمك',
-            style: t.bodyMedium),
+        if (product.coverCustom)
+          Text(draft.cover.mode == CoverMode.designer ? 'الغلاف: نصممه لكِ' : 'الغلاف: من تصميمك',
+              style: t.bodyMedium),
         if (ready.emptySlots > 0)
           Padding(
             padding: const EdgeInsets.only(top: NSpace.xs),
@@ -336,7 +385,8 @@ class _Extras extends ConsumerWidget {
     final t = Theme.of(context).textTheme;
     final cart = ref.read(cartProvider.notifier);
     final photosLine = quote.lines.where((l) => l.label.startsWith(Addon.photos.label)).firstOrNull;
-    String price(Addon a) => settings.priceOf(a) > 0 ? '+ ${formatIqd(settings.priceOf(a))}' : 'السعر قريباً';
+    int pr(Addon a) => book.product.priceOf(a, settings);
+    String price(Addon a) => pr(a) > 0 ? '+ ${formatIqd(pr(a))}' : 'السعر قريباً';
 
     final free = quote.lines.any((l) => l.free);
     Widget auto(Addon a, String why, {QuoteLine? line}) {
@@ -393,9 +443,10 @@ class _Extras extends ConsumerWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.quote, required this.books});
+  const _Summary({required this.quote, required this.books, required this.items});
   final OrderQuote quote;
   final List<CartBook> books;
+  final List<CartShopItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +454,7 @@ class _Summary extends StatelessWidget {
     String amount(QuoteLine l) => l.free ? 'مجاناً' : l.unpriced ? 'قريباً' : formatIqd(l.amount);
     final multi = books.length > 1;
     final priced = !quote.hasUnpriced;
+    final missing = items.where((i) => i.line.missing(i.product) != null).firstOrNull;
 
     Widget line(String a, String b, {TextStyle? style}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 5),
@@ -429,6 +481,14 @@ class _Summary extends StatelessWidget {
             for (final l in quote.books[i].lines)
               line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
           ],
+          if (items.isNotEmpty) ...[
+            if (books.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: NSpace.sm),
+                child: Text('المنتجات', style: t.labelLarge?.copyWith(color: NColors.sageDark)),
+              ),
+            for (final l in quote.items) line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
+          ],
           const Divider(height: NSpace.lg, color: NColors.line),
           if (quote.saved > 0)
             line('وفّرتِ (غلاف مجاني لكل كتاب)', formatIqd(quote.saved),
@@ -444,14 +504,87 @@ class _Summary extends StatelessWidget {
                   style: t.bodySmall),
             ),
           const SizedBox(height: NSpace.lg),
+          if (missing != null) ...[
+            Text('أكملي بيانات «${missing.product.title}» قبل المتابعة.',
+                style: t.bodySmall?.copyWith(color: NColors.danger)),
+            const SizedBox(height: NSpace.sm),
+          ],
           FilledButton(
-            onPressed: () => context.go(Routes.checkout),
+            onPressed: missing == null ? () => context.go(Routes.checkout) : null,
             child: const Text('متابعة لإتمام الطلب'),
           ),
           const SizedBox(height: NSpace.md),
           const PrivacyBadge(dense: true),
         ],
       ),
+    );
+  }
+}
+
+class _ShopItemCard extends ConsumerWidget {
+  const _ShopItemCard({required this.item});
+  final CartShopItem item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final p = item.product;
+    final l = item.line;
+    final missing = l.missing(p);
+    final details = [
+      for (final f in p.options.fields)
+        if (f.type != FieldType.photos && (l.texts[f.id] ?? '').isNotEmpty) '${f.label}: ${l.texts[f.id]}',
+    ];
+    final photos = l.photoIds.toList();
+    return Container(
+      padding: const EdgeInsets.all(NSpace.md),
+      decoration: _card,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.all(NRadius.md),
+          child: SizedBox.square(
+            dimension: isMobile(context) ? 80 : 104,
+            child: p.coverImage == null
+                ? const ColoredBox(color: NColors.sandSoft)
+                : Image(image: p.coverImage!, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(width: NSpace.md),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(p.title, style: t.titleMedium),
+            Text('${l.qty} ${p.options.unitLabel} × ${formatIqd(p.basePrice)} = ${formatIqd(p.basePrice * l.qty)}',
+                style: t.bodyMedium),
+            for (final d in details) Text(d, style: t.bodySmall),
+            if (photos.isNotEmpty) ...[
+              const SizedBox(height: NSpace.xs),
+              Wrap(spacing: 4, runSpacing: 4, children: [
+                for (final id in photos.take(6)) ShopPhotoThumb(id: id, size: 36),
+                if (photos.length > 6) Text('+${photos.length - 6}', style: t.bodySmall),
+              ]),
+            ],
+            if (missing != null)
+              Padding(
+                padding: const EdgeInsets.only(top: NSpace.xs),
+                child: Text('ناقص: $missing', style: t.bodySmall?.copyWith(color: NColors.danger)),
+              ),
+            const SizedBox(height: NSpace.sm),
+            Wrap(spacing: NSpace.sm, runSpacing: NSpace.sm, children: [
+              OutlinedButton.icon(
+                onPressed: () => context.go(Routes.product(p.slug, line: l.id)),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('تعديل'),
+              ),
+              TextButton.icon(
+                onPressed: () => ref.read(shopCartProvider.notifier).remove(l.id),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('إزالة'),
+                style: TextButton.styleFrom(foregroundColor: NColors.danger),
+              ),
+            ]),
+          ]),
+        ),
+      ]),
     );
   }
 }

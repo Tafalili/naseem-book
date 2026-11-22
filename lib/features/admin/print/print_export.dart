@@ -294,6 +294,24 @@ Future<Uint8List> buildPrintZip(AdminRepository repo, AdminOrder order, {require
       await Future<void>.delayed(Duration.zero);
     }
   }
+  // shop items: the customer's details and original photos, one folder each
+  for (final it in order.items) {
+    final folder = 'items/${it.no.toString().padLeft(2, '0')}_${_safeName(it.title)}/';
+    notes
+      ..writeln('— ${it.title} × ${it.qty}${it.photos.isEmpty ? '' : ' (الصور في المجلد $folder)'}')
+      ..writeAll(it.texts.map((e) => '${e.$1}: ${e.$2}\n'))
+      ..writeln();
+    for (final (n, path) in it.photos.indexed) {
+      onProgress('تحميل صور ${it.title}', n, it.photos.length);
+      try {
+        final bytes = await repo.download('order-photos', path);
+        archive.add(ArchiveFile.bytes('${folder}photo_${(n + 1).toString().padLeft(2, '0')}.jpg', bytes)
+          ..compression = CompressionType.none);
+      } catch (_) {
+        missing.add('صورة غير موجودة (${it.title}): $path');
+      }
+    }
+  }
   if (missing.isNotEmpty) {
     notes
       ..writeln('تنبيهات:')
@@ -306,6 +324,8 @@ Future<Uint8List> buildPrintZip(AdminRepository repo, AdminOrder order, {require
   onProgress('ضغط الملف', total, total);
   return Uint8List.fromList(ZipEncoder().encodeBytes(archive));
 }
+
+String _safeName(String s) => s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim().replaceAll(RegExp(r'\s+'), '_');
 
 /// Saves bytes as a file in the browser.
 void saveFile(Uint8List bytes, String name, String type) {

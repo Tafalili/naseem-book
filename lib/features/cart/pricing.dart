@@ -36,35 +36,38 @@ Quote buildQuote({
   required List<PageTemplate> pages,
   bool multiBook = false,
 }) {
-  int p(Addon a) => settings.priceOf(a);
+  int p(Addon a) => product.priceOf(a, settings);
+  final cover = product.coverCustom;
   final slotIds = {for (final pg in pages) ...pg.photoSlots.map((s) => s.id)};
   final filled = draft.placements.keys.where(slotIds.contains).length;
   return Quote([
     QuoteLine(product.title, product.basePrice),
     // One cover charge: «اتركه لذوقكم» already includes the name.
-    if (draft.cover.childName.trim().isNotEmpty && draft.cover.mode != CoverMode.designer)
+    if (cover && draft.cover.childName.trim().isNotEmpty && draft.cover.mode != CoverMode.designer)
       QuoteLine(Addon.childName.label, p(Addon.childName), auto: true, free: multiBook),
     if (filled > 0)
       QuoteLine('${Addon.photos.label} ($filled من ${slotIds.length})',
           photosPrice(p(Addon.photos), filled, slotIds.length),
           auto: true),
     if (draft.hasPrintedText) QuoteLine(Addon.printedText.label, p(Addon.printedText), auto: true),
-    if (draft.cover.mode == CoverMode.designer)
+    if (cover && draft.cover.mode == CoverMode.designer)
       QuoteLine(Addon.designerCover.label, p(Addon.designerCover), auto: true, free: multiBook),
     if (item.giftWrap) QuoteLine(Addon.giftWrap.label, p(Addon.giftWrap)),
   ], settings);
 }
 
-/// Several books (one per child) in one order; the deposit is taken on the total.
+/// Several books (one per child) and shop items in one order; the deposit is taken on the total.
 class OrderQuote {
-  OrderQuote(this.books, this.settings);
+  OrderQuote(this.books, this.settings, {this.items = const []});
   final List<Quote> books;
+  final List<QuoteLine> items;
   final PublicSettings settings;
 
-  int get total => books.fold(0, (s, q) => s + q.total);
+  int get itemsTotal => items.fold(0, (s, l) => s + l.amount);
+  int get total => books.fold(0, (s, q) => s + q.total) + itemsTotal;
   int get deposit => settings.depositFor(total);
   bool get hasDeposit => settings.depositPercent > 0;
-  bool get hasUnpriced => books.any((q) => q.hasUnpriced);
+  bool get hasUnpriced => books.any((q) => q.hasUnpriced) || items.any((l) => l.unpriced);
   /// What the free cover saves across the order.
   int get saved => books.fold(0, (s, q) => s + q.lines.where((l) => l.free).fold(0, (a, l) => a + l.unit));
 }

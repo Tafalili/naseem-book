@@ -8,6 +8,7 @@ import '../../core/theme/typography.dart';
 import '../../shared/widgets/layout.dart';
 import '../../shared/widgets/privacy_badge.dart';
 import '../cart/cart_controller.dart';
+import '../cart/shop_cart.dart';
 
 /// Header + scrollable page + footer for all storefront routes.
 class StoreShell extends StatelessWidget {
@@ -45,7 +46,7 @@ class _Header extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart = ref.watch(cartProvider).length;
+    final inCart = ref.watch(cartProvider).length + ref.watch(shopCartProvider).length;
     final mobile = isMobile(context);
     return ContentWidth(
       child: Row(

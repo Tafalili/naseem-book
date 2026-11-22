@@ -18,7 +18,8 @@ class Readiness {
   bool get blocking => false;
   bool get complete => !nameMissing && emptySlots == 0;
 
-  factory Readiness.of(BookDraft d, List<PageTemplate> pages) {
+  /// [needsName] is false for books sold without cover options.
+  factory Readiness.of(BookDraft d, List<PageTemplate> pages, {bool needsName = true}) {
     final empty = <int>[];
     var emptySlots = 0, total = 0;
     for (final p in pages) {
@@ -33,7 +34,7 @@ class Readiness {
       if (pageEmpty) empty.add(p.pageNumber);
     }
     return Readiness(
-      nameMissing: d.cover.childName.trim().isEmpty,
+      nameMissing: needsName && d.cover.childName.trim().isEmpty,
       emptyPages: empty,
       emptySlots: emptySlots,
       totalSlots: total,

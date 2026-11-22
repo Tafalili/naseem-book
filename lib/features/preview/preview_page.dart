@@ -66,7 +66,7 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
     final cover = pages.firstWhere((p) => p.isCover);
     final inner = pages.where((p) => !p.isCover).toList()
       ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
-    final ready = Readiness.of(draft, pages);
+    final ready = Readiness.of(draft, pages, needsName: product.coverCustom);
     final count = inner.length + 4;
 
     Widget pageAt(int i) {
@@ -144,6 +144,8 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
 
     final summary = _Summary(
       draft: draft,
+      title: product.title,
+      coverCustom: product.coverCustom,
       ready: ready,
       inCart: ref.watch(cartProvider).any((e) => e.book == widget.book),
       onEdit: () => context.go(Routes.editor(widget.book)),
@@ -283,9 +285,13 @@ class _Summary extends StatelessWidget {
     required this.onEdit,
     required this.onAdd,
     required this.onCart,
+    this.title = 'كتاب نسيم',
+    this.coverCustom = true,
   });
 
   final BookDraft draft;
+  final String title;
+  final bool coverCustom;
   final Readiness ready;
   final bool inCart;
   final VoidCallback onEdit, onAdd, onCart;
@@ -308,15 +314,17 @@ class _Summary extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(name.isEmpty ? 'كتاب نسيم' : 'كتاب $name', style: t.headlineSmall),
+        Text(!coverCustom ? title : name.isEmpty ? title : '$title · $name', style: t.headlineSmall),
         const SizedBox(height: NSpace.md),
-        ready.nameMissing
-            ? row(Icons.info_outline_rounded, NColors.warning, 'بدون اسم على الغلاف')
-            : row(Icons.check_circle_rounded, NColors.success, 'الاسم على الغلاف: $name'),
+        if (coverCustom)
+          ready.nameMissing
+              ? row(Icons.info_outline_rounded, NColors.warning, 'بدون اسم على الغلاف')
+              : row(Icons.check_circle_rounded, NColors.success, 'الاسم على الغلاف: $name'),
         ready.emptySlots == 0
             ? row(Icons.check_circle_rounded, NColors.success, 'كل الإطارات فيها صور ($filled)')
             : row(Icons.info_outline_rounded, NColors.warning,
                 'الإطارات المملوءة بالصور: $filled من ${ready.totalSlots}'),
+        if (coverCustom)
         row(
           draft.cover.mode == CoverMode.designer ? Icons.auto_awesome_outlined : Icons.brush_outlined,
           NColors.inkMuted,

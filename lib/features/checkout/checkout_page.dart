@@ -10,6 +10,7 @@ import '../../data/repositories/catalog_repository.dart';
 import '../../shared/widgets/layout.dart';
 import '../../shared/widgets/privacy_badge.dart';
 import '../cart/cart_controller.dart';
+import '../cart/shop_cart.dart';
 import '../cart/cart_page.dart';
 import '../cart/pricing.dart';
 import '../editor/draft/draft_controller.dart';
@@ -55,12 +56,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
+    final shop = ref.watch(shopCartProvider);
     final t = Theme.of(context).textTheme;
-    if (items.isEmpty) {
+    if (items.isEmpty && shop.isEmpty) {
       return ContentWidth(
         vertical: NSpace.xxl,
         child: Column(children: [
-          Text('لا يوجد كتاب في سلتك', style: t.titleLarge),
+          Text('سلتك فارغة', style: t.titleLarge),
           const SizedBox(height: NSpace.md),
           FilledButton(onPressed: () => context.go(Routes.cart), child: const Text('العودة للسلة')),
         ]),
@@ -68,8 +70,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
     final settings = ref.watch(publicSettingsProvider);
     List<CartBook>? books;
+    List<CartShopItem>? shopItems;
     try {
       books = watchCartBooks(ref, items);
+      shopItems = watchShopItems(ref, shop);
       if (settings.hasError) throw settings.error!;
     } catch (_) {
       return ContentWidth(
@@ -80,20 +84,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ref.invalidate(templatesProvider(it.slug));
             ref.invalidate(productBySlugProvider(it.slug));
           }
+          for (final l in shop) {
+            ref.invalidate(productBySlugProvider(l.slug));
+          }
           ref.invalidate(publicSettingsProvider);
         }),
       );
     }
-    if (books == null || books.isEmpty || !settings.hasValue) {
+    if (books == null || shopItems == null || (books.isEmpty && shopItems.isEmpty) || !settings.hasValue) {
       return const Padding(
         padding: EdgeInsets.all(NSpace.xxl),
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final quote = quoteCart(books, settings.value!);
-    final form = _formCard(context, books);
-    final summary = _SummaryCard(quote: quote, books: books);
+    final quote = quoteCart(books, settings.value!, items: shopItems);
+    final form = _formCard(context, books, shopItems);
+    final summary = _SummaryCard(quote: quote, books: books, items: shopItems);
 
     return ContentWidth(
       vertical: NSpace.xl,
@@ -121,7 +128,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Widget _formCard(BuildContext context, List<CartBook> books) {
+  Widget _formCard(BuildContext context, List<CartBook> books, List<CartShopItem> shopItems) {
     final t = Theme.of(context).textTheme;
     final st = ref.watch(checkoutProvider);
     return Container(
@@ -204,7 +211,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               Text('لا تغلقي الصفحة حتى يكتمل الإرسال.', textAlign: TextAlign.center, style: t.bodySmall),
             ] else
               FilledButton.icon(
-                onPressed: () => _submit(books),
+                onPressed: () => _submit(books, shopItems),
                 icon: const Icon(Icons.send_rounded),
                 label: const Text('إرسال الطلب'),
               ),
@@ -216,10 +223,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Future<void> _submit(List<CartBook> books) async {
+  Future<void> _submit(List<CartBook> books, List<CartShopItem> shopItems) async {
     if (!_form.currentState!.validate()) return;
     final code = await ref.read(checkoutProvider.notifier).submit(
           books: books,
+          items: shopItems,
           customer: CustomerInfo(
             name: _name.text.trim(),
             phone: normalizeIraqiPhone(_phone.text)!,
@@ -257,9 +265,10 @@ class _Banner extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.quote, required this.books});
+  const _SummaryCard({required this.quote, required this.books, required this.items});
   final OrderQuote quote;
   final List<CartBook> books;
+  final List<CartShopItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -297,6 +306,13 @@ class _SummaryCard extends StatelessWidget {
             for (final l in quote.books[i].lines)
               line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
           ],
+          if (items.isNotEmpty) ...[
+            Padding(
+              padding: EdgeInsets.only(top: books.isEmpty ? 0 : NSpace.md, bottom: NSpace.xs),
+              child: Text('المنتجات', style: t.titleMedium),
+            ),
+            for (final l in quote.items) line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
+          ],
           const Divider(height: NSpace.lg, color: NColors.line),
           if (quote.saved > 0)
             line('وفّرتِ (غلاف مجاني لكل كتاب)', formatIqd(quote.saved),
@@ -311,7 +327,7 @@ class _SummaryCard extends StatelessWidget {
             decoration: const BoxDecoration(color: NColors.sageSoft, borderRadius: BorderRadius.all(NRadius.md)),
             child: Text(
               'بعد الإرسال تظهر لكِ أرقام الدفع (زين كاش أو سوبر كي). ادفعي العربون وارفعي صورة الإيصال، '
-              'ونبدأ بكتابك بعد مراجعته.',
+              'ونبدأ بطلبك بعد مراجعته.',
               style: t.bodySmall?.copyWith(color: NColors.ink),
             ),
           ),
