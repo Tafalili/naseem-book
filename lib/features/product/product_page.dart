@@ -195,7 +195,7 @@ class _Details extends ConsumerWidget {
         const SizedBox(height: NSpace.md),
         Text(priceOrSoon(p.basePrice), style: t.headlineMedium?.copyWith(color: NColors.sageDark)),
         if (settings != null && settings.depositPercent > 0 && p.basePrice > 0)
-          Text('عربون ${settings.depositPercent.toStringAsFixed(0)}٪ عند الطلب، والباقي عند الاستلام',
+          Text('عربون ${formatIqd(settings.depositFor(p.basePrice))} عند الطلب، والباقي عند الاستلام',
               style: t.bodySmall),
         if (p.description != null) ...[
           const SizedBox(height: NSpace.md),

@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/cart/cart_page.dart';
+import '../../features/checkout/checkout_page.dart';
 import '../../features/editor/editor_page.dart';
 import '../../features/home/home_page.dart';
+import '../../features/orders/order_page.dart';
 import '../../features/preview/preview_page.dart';
 import '../../features/product/product_page.dart';
 import '../../features/shell/store_shell.dart';
@@ -16,6 +18,9 @@ abstract final class Routes {
   static String editor(String slug) => '/design/$slug';
   static String preview(String slug) => '/design/$slug/preview';
   static const cart = '/cart';
+  static const checkout = '/checkout';
+  static const track = '/track';
+  static String order(String code) => '/order/$code';
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -39,6 +44,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: Routes.cart,
             pageBuilder: (_, _) => const NoTransitionPage(child: CartPage()),
+          ),
+          GoRoute(
+            path: Routes.checkout,
+            pageBuilder: (_, _) => const NoTransitionPage(child: CheckoutPage()),
+          ),
+          GoRoute(
+            path: Routes.track,
+            pageBuilder: (_, _) => const NoTransitionPage(child: TrackPage()),
+          ),
+          GoRoute(
+            path: '/order/:code',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: OrderPage(code: s.pathParameters['code']!.toUpperCase()),
+            ),
           ),
         ],
       ),

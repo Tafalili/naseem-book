@@ -14,8 +14,8 @@ class Readiness {
   final List<int> emptyPages; // page numbers with at least one empty frame
   final int emptySlots, totalSlots;
 
-  /// The name is required; empty frames only need confirmation.
-  bool get blocking => nameMissing;
+  /// Nothing blocks: the name and the photos are paid options.
+  bool get blocking => false;
   bool get complete => !nameMissing && emptySlots == 0;
 
   factory Readiness.of(BookDraft d, List<PageTemplate> pages) {

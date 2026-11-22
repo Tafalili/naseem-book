@@ -1,3 +1,4 @@
+import '../../data/models/page_template.dart';
 import '../../data/models/product.dart';
 import '../../data/models/public_settings.dart';
 import '../editor/draft/book_draft.dart';
@@ -16,12 +17,13 @@ class QuoteLine {
 /// Client-side estimate. The order total is recomputed on the server by
 /// submit_order() from app_settings, using the same rules.
 class Quote {
-  Quote(this.lines, this.depositPercent);
+  Quote(this.lines, this.settings);
   final List<QuoteLine> lines;
-  final double depositPercent;
+  final PublicSettings settings;
 
   int get total => lines.fold(0, (s, l) => s + l.amount);
-  int get deposit => (total * depositPercent / 100).round();
+  int get deposit => settings.depositFor(total);
+  bool get hasDeposit => settings.depositPercent > 0;
   bool get hasUnpriced => lines.any((l) => l.unpriced);
 }
 
@@ -30,15 +32,31 @@ Quote buildQuote({
   required PublicSettings settings,
   required BookDraft draft,
   required CartItem item,
+  required List<PageTemplate> pages,
 }) {
   int p(Addon a) => settings.priceOf(a);
+  final slotIds = {for (final pg in pages) ...pg.photoSlots.map((s) => s.id)};
+  final filled = draft.placements.keys.where(slotIds.contains).length;
   return Quote([
     QuoteLine(product.title, product.basePrice),
+    if (draft.cover.childName.trim().isNotEmpty)
+      QuoteLine(Addon.childName.label, p(Addon.childName), auto: true),
+    if (filled > 0)
+      QuoteLine('${Addon.photos.label} ($filled من ${slotIds.length})',
+          photosPrice(p(Addon.photos), filled, slotIds.length),
+          auto: true),
     if (draft.hasPrintedText) QuoteLine(Addon.printedText.label, p(Addon.printedText), auto: true),
     if (draft.cover.mode == CoverMode.designer)
       QuoteLine(Addon.designerCover.label, p(Addon.designerCover), auto: true),
     if (item.giftWrap) QuoteLine(Addon.giftWrap.label, p(Addon.giftWrap)),
     if (item.extraCopies > 0)
       QuoteLine(Addon.extraCopy.label, p(Addon.extraCopy), qty: item.extraCopies),
-  ], settings.depositPercent);
+  ], settings);
+}
+
+/// Photos are priced pro rata: [full] buys every frame; rounded up to 250 IQD.
+int photosPrice(int full, int filled, int totalSlots) {
+  if (full <= 0 || filled <= 0 || totalSlots <= 0) return 0;
+  if (filled >= totalSlots) return full;
+  return ((full * filled / totalSlots) / 250).ceil() * 250;
 }
