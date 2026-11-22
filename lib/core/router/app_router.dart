@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../../features/admin/admin_entry.dart' deferred as admin;
 import '../../features/cart/cart_page.dart';
 import '../../features/checkout/checkout_page.dart';
 import '../../features/editor/editor_page.dart';
@@ -72,6 +74,47 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: Routes.styleGuide, builder: (_, _) => const StyleGuidePage()),
+      GoRoute(
+        path: '/admin',
+        pageBuilder: (_, s) => NoTransitionPage(child: _AdminLoader(location: s.uri.path)),
+        routes: [
+          GoRoute(
+            path: 'orders/:id',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: _AdminLoader(location: s.uri.path, orderId: s.pathParameters['id'])),
+          ),
+          GoRoute(
+            path: 'templates',
+            pageBuilder: (_, s) => NoTransitionPage(child: _AdminLoader(location: s.uri.path)),
+          ),
+          GoRoute(
+            path: 'settings',
+            pageBuilder: (_, s) => NoTransitionPage(child: _AdminLoader(location: s.uri.path)),
+          ),
+        ],
+      ),
     ],
   );
 });
+
+final _adminLib = admin.loadLibrary();
+
+class _AdminLoader extends StatelessWidget {
+  const _AdminLoader({required this.location, this.orderId});
+  final String location;
+  final String? orderId;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+        future: _adminLib,
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return const Scaffold(body: Center(child: Text('تعذّر تحميل لوحة الإدارة. حدّث الصفحة.')));
+          }
+          if (snap.connectionState != ConnectionState.done) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          return admin.adminPage(location, orderId: orderId);
+        },
+      );
+}
