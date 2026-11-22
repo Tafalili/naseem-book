@@ -6,15 +6,12 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/format/money.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/tokens.dart';
-import '../../data/models/page_template.dart';
-import '../../data/models/product.dart';
-import '../../data/models/public_settings.dart';
 import '../../data/repositories/catalog_repository.dart';
 import '../../shared/widgets/layout.dart';
 import '../../shared/widgets/privacy_badge.dart';
 import '../cart/cart_controller.dart';
+import '../cart/cart_page.dart';
 import '../cart/pricing.dart';
-import '../editor/draft/book_draft.dart';
 import '../editor/draft/draft_controller.dart';
 import 'checkout_controller.dart';
 
@@ -46,7 +43,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final _address = TextEditingController();
   final _notes = TextEditingController();
   String? _city;
-  String? _loadedSlug;
 
   @override
   void dispose() {
@@ -70,37 +66,34 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         ]),
       );
     }
-    final item = items.first;
-    if (_loadedSlug != item.slug) {
-      _loadedSlug = item.slug;
-      Future.microtask(() => ref.read(draftProvider.notifier).load(item.slug));
-    }
-    final draft = ref.watch(draftProvider).draft;
-    final pages = ref.watch(templatesProvider(item.slug));
-    final product = ref.watch(productBySlugProvider(item.slug));
     final settings = ref.watch(publicSettingsProvider);
-
-    if (pages.hasError || product.hasError || settings.hasError) {
+    List<CartBook>? books;
+    try {
+      books = watchCartBooks(ref, items);
+      if (settings.hasError) throw settings.error!;
+    } catch (_) {
       return ContentWidth(
         vertical: NSpace.xl,
         child: LoadError(onRetry: () {
-          ref.invalidate(templatesProvider(item.slug));
-          ref.invalidate(productBySlugProvider(item.slug));
+          for (final it in items) {
+            ref.invalidate(savedDraftProvider(it.book));
+            ref.invalidate(templatesProvider(it.slug));
+            ref.invalidate(productBySlugProvider(it.slug));
+          }
           ref.invalidate(publicSettingsProvider);
         }),
       );
     }
-    if (draft == null || draft.productSlug != item.slug || !pages.hasValue ||
-        !product.hasValue || !settings.hasValue || product.value == null) {
+    if (books == null || books.isEmpty || !settings.hasValue) {
       return const Padding(
         padding: EdgeInsets.all(NSpace.xxl),
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final quote = buildQuote(product: product.value!, settings: settings.value!, draft: draft, item: item, pages: pages.value!);
-    final form = _formCard(context, draft, pages.value!, item);
-    final summary = _SummaryCard(quote: quote, product: product.value!, draft: draft, settings: settings.value!);
+    final quote = quoteCart(books, settings.value!);
+    final form = _formCard(context, books);
+    final summary = _SummaryCard(quote: quote, books: books);
 
     return ContentWidth(
       vertical: NSpace.xl,
@@ -128,7 +121,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Widget _formCard(BuildContext context, BookDraft draft, List<PageTemplate> pages, CartItem item) {
+  Widget _formCard(BuildContext context, List<CartBook> books) {
     final t = Theme.of(context).textTheme;
     final st = ref.watch(checkoutProvider);
     return Container(
@@ -211,7 +204,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               Text('لا تغلقي الصفحة حتى يكتمل الإرسال.', textAlign: TextAlign.center, style: t.bodySmall),
             ] else
               FilledButton.icon(
-                onPressed: () => _submit(draft, pages, item),
+                onPressed: () => _submit(books),
                 icon: const Icon(Icons.send_rounded),
                 label: const Text('إرسال الطلب'),
               ),
@@ -223,12 +216,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Future<void> _submit(BookDraft draft, List<PageTemplate> pages, CartItem item) async {
+  Future<void> _submit(List<CartBook> books) async {
     if (!_form.currentState!.validate()) return;
     final code = await ref.read(checkoutProvider.notifier).submit(
-          draft: draft,
-          pages: pages,
-          item: item,
+          books: books,
           customer: CustomerInfo(
             name: _name.text.trim(),
             phone: normalizeIraqiPhone(_phone.text)!,
@@ -266,11 +257,9 @@ class _Banner extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.quote, required this.product, required this.draft, required this.settings});
-  final Quote quote;
-  final Product product;
-  final BookDraft draft;
-  final PublicSettings settings;
+  const _SummaryCard({required this.quote, required this.books});
+  final OrderQuote quote;
+  final List<CartBook> books;
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +272,7 @@ class _SummaryCard extends StatelessWidget {
             Text(b, style: style ?? t.bodyMedium),
           ]),
         );
-    final name = draft.cover.childName.trim();
+    String amount(QuoteLine l) => l.free ? 'مجاناً' : l.unpriced ? 'قريباً' : formatIqd(l.amount);
     return Container(
       padding: const EdgeInsets.all(NSpace.lg),
       decoration: const BoxDecoration(
@@ -294,11 +283,24 @@ class _SummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(name.isEmpty ? product.title : '${product.title} · $name', style: t.titleMedium),
-          const SizedBox(height: NSpace.sm),
-          for (final l in quote.lines)
-            line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, l.unpriced ? 'قريباً' : formatIqd(l.amount)),
+          for (var i = 0; i < books.length; i++) ...[
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : NSpace.md, bottom: NSpace.xs),
+              child: Text(
+                  books.length > 1
+                      ? bookTitle(books[i], i)
+                      : books[i].draft.cover.childName.trim().isEmpty
+                          ? books[i].product.title
+                          : '${books[i].product.title} · ${books[i].draft.cover.childName.trim()}',
+                  style: t.titleMedium),
+            ),
+            for (final l in quote.books[i].lines)
+              line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
+          ],
           const Divider(height: NSpace.lg, color: NColors.line),
+          if (quote.saved > 0)
+            line('وفّرتِ (غلاف مجاني لكل كتاب)', formatIqd(quote.saved),
+                style: t.bodyMedium?.copyWith(color: NColors.sageDark)),
           line('الإجمالي', priced ? formatIqd(quote.total) : 'يُحدد عند التأكيد', style: t.titleMedium),
           if (priced && quote.hasDeposit)
             line('العربون الآن', formatIqd(quote.deposit),
@@ -308,7 +310,7 @@ class _SummaryCard extends StatelessWidget {
             padding: const EdgeInsets.all(NSpace.md),
             decoration: const BoxDecoration(color: NColors.sageSoft, borderRadius: BorderRadius.all(NRadius.md)),
             child: Text(
-              'بعد الإرسال تظهر لكِ أرقام الدفع (زين كاش، كي كارد، FIB). ادفعي العربون وارفعي صورة الإيصال، '
+              'بعد الإرسال تظهر لكِ أرقام الدفع (زين كاش أو سوبر كي). ادفعي العربون وارفعي صورة الإيصال، '
               'ونبدأ بكتابك بعد مراجعته.',
               style: t.bodySmall?.copyWith(color: NColors.ink),
             ),

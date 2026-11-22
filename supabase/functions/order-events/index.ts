@@ -1,5 +1,5 @@
 // Order events from the `orders_event_notify` trigger (pg_net):
-//  - new order / receipt uploaded  -> Telegram message to the store owner
+//  - new order / receipt uploaded  -> e-mail (Resend) + Web Push to the store admins
 //  - any status change             -> Web Push to the customer's subscribed browsers
 // Auth: shared secret header, checked against Vault through a service_role-only RPC.
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
@@ -16,7 +16,13 @@ const STATUS: Record<string, string> = {
   cancelled: "❌ ملغي",
 };
 
+// Public site address (set the SITE_URL secret once the domain is live); links are omitted until then.
+const SITE_URL = (Deno.env.get("SITE_URL") ?? "").replace(/\/$/, "");
+const PUSH_SUBJECT = Deno.env.get("PUSH_SUBJECT") ?? "https://github.com/Tafalili/naseem-book";
+
 const ADDONS: Record<string, string> = {
+  child_name: "اسم الطفل على الغلاف",
+  photos: "صور داخل الكتاب",
   printed_text: "نص مطبوع",
   designer_cover: "الغلاف من تصميمنا",
   gift_wrap: "تغليف هدية",
@@ -41,7 +47,8 @@ type Order = {
   status: string;
   receipt_path: string | null;
   notes: string | null;
-  addons: { key: string; qty: number }[];
+  addons: { key: string; qty: number; free?: boolean }[];
+  book_count: number | null;
 };
 
 Deno.serve(async (req) => {
@@ -61,7 +68,7 @@ Deno.serve(async (req) => {
   const { data: o } = await db
     .from("orders")
     .select(
-      "id,order_code,customer_name,phone,city,address,child_name,cover_mode,total,deposit_amount,status,receipt_path,notes,addons",
+      "id,order_code,customer_name,phone,city,address,child_name,cover_mode,total,deposit_amount,status,receipt_path,notes,addons,book_count",
     )
     .eq("id", order_id)
     .maybeSingle<Order>();
@@ -69,7 +76,7 @@ Deno.serve(async (req) => {
 
   const result: Record<string, unknown> = {};
   if (event === "created" || to === "deposit_review") {
-    result.telegram = await notifyOwner(db, cfg.telegram_chat_id, o, event === "created");
+    result.owner = await notifyOwner(db, cfg, o, event === "created");
   }
   if (event === "status") {
     result.push = await notifyCustomer(db, cfg, o);
@@ -79,49 +86,108 @@ Deno.serve(async (req) => {
 
 async function notifyOwner(
   db: ReturnType<typeof createClient>,
-  chatId: string | null,
+  cfg: { vapid_public: string | null; vapid_private: string | null; notify_email: string | null },
   o: Order,
   isNew: boolean,
 ) {
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  if (!token || !chatId) return "skipped: telegram not configured";
+  const out: Record<string, string> = {};
+  // multi-book orders repeat add-ons per book: count them, mark the free covers
+  const counts = new Map<string, number>();
+  for (const a of o.addons ?? []) {
+    const label = (ADDONS[a.key] ?? a.key) + (a.free ? " (مجاناً)" : "");
+    counts.set(label, (counts.get(label) ?? 0) + (a.qty ?? 1));
+  }
+  const addons = [...counts].map(([k, n]) => (n > 1 ? `${k} × ${n}` : k)).join("، ");
+  const books = o.book_count ?? 1;
+  const adminUrl = `${SITE_URL}/admin/orders/${o.id}`;
+  const title = isNew ? `طلب جديد ${o.order_code}` : `وصل عربون للطلب ${o.order_code}`;
 
-  const addons = (o.addons ?? [])
-    .map((a) => (a.qty > 1 ? `${ADDONS[a.key] ?? a.key} × ${a.qty}` : ADDONS[a.key] ?? a.key))
-    .join("، ");
-  const lines = isNew
-    ? [
-      `🆕 <b>طلب جديد ${esc(o.order_code)}</b>`,
-      `👶 ${esc(o.child_name)}`,
-      `👤 ${esc(o.customer_name)} · <code>${esc(o.phone)}</code>`,
-      `📍 ${esc(o.city)} · ${esc(o.address)}`,
-      `🎨 الغلاف: ${o.cover_mode === "designer" ? "من تصميمنا" : "من تصميم الزبونة"}`,
-      addons ? `➕ ${esc(addons)}` : "",
-      `💰 الإجمالي ${iqd(o.total)} · العربون ${iqd(o.deposit_amount)}`,
-      o.notes ? `📝 ${esc(o.notes)}` : "",
-    ]
-    : [
-      `💳 <b>إيصال عربون للطلب ${esc(o.order_code)}</b>`,
-      `👤 ${esc(o.customer_name)} · <code>${esc(o.phone)}</code>`,
-      `💰 العربون المطلوب ${iqd(o.deposit_amount)}`,
-    ];
-
-  if (!isNew && o.receipt_path) {
-    const { data } = await db.storage.from("receipts").createSignedUrl(o.receipt_path, 60 * 60 * 24 * 7);
-    if (data?.signedUrl) lines.push(`🔗 <a href="${esc(data.signedUrl)}">عرض الإيصال</a> (صالح 7 أيام)`);
+  // 1) e-mail through Resend (filterable: fixed sender + subject prefix)
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key || !cfg.notify_email) {
+    out.email = "skipped: not configured";
+  } else {
+    const rows: [string, string][] = isNew
+      ? [
+        ...(books > 1 ? [["عدد الكتب", String(books)] as [string, string]] : []),
+        [books > 1 ? "الأطفال" : "الطفل", o.child_name || "بدون اسم على الغلاف"],
+        ["الزبون", `${o.customer_name} · ${o.phone}`],
+        ["العنوان", `${o.city} · ${o.address}`],
+        ...(books > 1
+          ? []
+          : [["الغلاف", o.cover_mode === "designer" ? "من تصميمنا" : "من تصميم الزبون"] as [string, string]]),
+        ["الإضافات", addons || "لا توجد"],
+        ["الإجمالي", iqd(o.total)],
+        ["العربون", iqd(o.deposit_amount)],
+        ...(o.notes ? [["ملاحظات", o.notes] as [string, string]] : []),
+      ]
+      : [
+        ["الزبون", `${o.customer_name} · ${o.phone}`],
+        ["العربون المطلوب", iqd(o.deposit_amount)],
+      ];
+    let receiptLink = "";
+    if (!isNew && o.receipt_path) {
+      const { data } = await db.storage.from("receipts").createSignedUrl(o.receipt_path, 60 * 60 * 24 * 7);
+      if (data?.signedUrl) {
+        receiptLink = `<p><a href="${esc(data.signedUrl)}">عرض الوصل</a> (الرابط صالح 7 أيام)</p>`;
+      }
+    }
+    const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:15px;color:#2b2b2b">
+<h2 style="color:#4f7a6c">${esc(title)}</h2>
+<table cellpadding="6" style="border-collapse:collapse">${
+      rows.map(([k, v]) => `<tr><td style="color:#777">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join("")
+    }</table>${receiptLink}
+${SITE_URL ? `<p><a href="${esc(adminUrl)}" style="background:#6E9A8B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">فتح الطلب في لوحة الإدارة</a></p>` : ""}
+</div>`;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        from: Deno.env.get("NOTIFY_FROM") ?? "كتاب نسيم <onboarding@resend.dev>",
+        to: [cfg.notify_email],
+        subject: `[كتاب نسيم] ${title}`,
+        html,
+      }),
+    });
+    out.email = res.ok ? "sent" : `error ${res.status} ${await res.text()}`;
   }
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: lines.filter(Boolean).join("\n"),
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-    }),
-  });
-  return res.ok ? "sent" : `error ${res.status}`;
+  // 2) Web Push to every admin browser that enabled it
+  if (!cfg.vapid_public || !cfg.vapid_private) {
+    out.push = "skipped: vapid not configured";
+  } else {
+    const { data: subs } = await db.from("admin_push_subscriptions").select("id,endpoint,keys");
+    webpush.setVapidDetails(PUSH_SUBJECT, cfg.vapid_public, cfg.vapid_private);
+    const payload = JSON.stringify({
+      title: `كتاب نسيم · ${title}`,
+      body: isNew
+        ? `${o.customer_name} · ${iqd(o.total)}`
+        : `العربون ${iqd(o.deposit_amount)} · ${o.customer_name}`,
+      url: `/admin/orders/${o.id}`,
+    });
+    out.push = await sendAll(db, "admin_push_subscriptions", subs ?? [], payload);
+  }
+  return out;
+}
+
+async function sendAll(
+  db: ReturnType<typeof createClient>,
+  table: string,
+  subs: { id: string; endpoint: string; keys: { p256dh: string; auth: string } }[],
+  payload: string,
+) {
+  if (!subs.length) return "no subscriptions";
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 60 * 60 * 24 });
+      sent++;
+    } catch (e) {
+      const code = (e as { statusCode?: number }).statusCode;
+      if (code === 404 || code === 410) await db.from(table).delete().eq("id", s.id);
+    }
+  }
+  return `sent ${sent}/${subs.length}`;
 }
 
 async function notifyCustomer(
@@ -134,28 +200,11 @@ async function notifyCustomer(
     .from("push_subscriptions")
     .select("id,endpoint,keys")
     .eq("order_id", o.id);
-  if (!subs?.length) return "no subscriptions";
-
-  webpush.setVapidDetails(
-    Deno.env.get("PUSH_SUBJECT") ?? "https://github.com/Tafalili/naseem-book",
-    cfg.vapid_public,
-    cfg.vapid_private,
-  );
+  webpush.setVapidDetails(PUSH_SUBJECT, cfg.vapid_public, cfg.vapid_private);
   const payload = JSON.stringify({
     title: `كتاب نسيم · طلب ${o.order_code}`,
     body: STATUS[o.status] ?? o.status,
     url: `/order/${o.order_code}`,
   });
-
-  let sent = 0;
-  for (const s of subs) {
-    try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 60 * 60 * 24 });
-      sent++;
-    } catch (e) {
-      const code = (e as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) await db.from("push_subscriptions").delete().eq("id", s.id);
-    }
-  }
-  return `sent ${sent}/${subs.length}`;
+  return await sendAll(db, "push_subscriptions", subs ?? [], payload);
 }

@@ -32,13 +32,164 @@ class CartPage extends ConsumerWidget {
         children: [
           Text('سلتك', style: t.headlineMedium),
           const SizedBox(height: NSpace.lg),
-          if (items.isEmpty)
-            const _Empty()
-          else
-            // One designed book per product; the store sells one book today.
-            _CartLine(item: items.first),
+          if (items.isEmpty) const _Empty() else _CartBody(items: items),
         ],
       ),
+    );
+  }
+}
+
+/// Everything one cart line needs, loaded.
+class CartBook {
+  const CartBook({required this.item, required this.product, required this.draft, required this.pages});
+  final CartItem item;
+  final Product product;
+  final BookDraft draft;
+  final List<PageTemplate> pages;
+}
+
+/// Loads every book in the cart. Null while loading; throws on load errors.
+List<CartBook>? watchCartBooks(WidgetRef ref, List<CartItem> items) {
+  final out = <CartBook>[];
+  var loading = false;
+  for (final it in items) {
+    final draft = ref.watch(savedDraftProvider(it.book));
+    final pages = ref.watch(templatesProvider(it.slug));
+    final product = ref.watch(productBySlugProvider(it.slug));
+    for (final a in [draft, pages, product]) {
+      if (a.hasError) throw a.error!;
+    }
+    if (!draft.hasValue || !pages.hasValue || !product.hasValue) {
+      loading = true;
+      continue;
+    }
+    final p = product.value;
+    if (p == null) continue; // product withdrawn; the line is dropped
+    out.add(CartBook(item: it, product: p, draft: draft.value!, pages: pages.value!));
+  }
+  return loading ? null : out;
+}
+
+OrderQuote quoteCart(List<CartBook> books, PublicSettings settings) => OrderQuote([
+      for (final b in books)
+        buildQuote(
+          product: b.product,
+          settings: settings,
+          draft: b.draft,
+          item: b.item,
+          pages: b.pages,
+          multiBook: books.length > 1,
+        ),
+    ], settings);
+
+String bookTitle(CartBook b, int index) {
+  final name = b.draft.cover.childName.trim();
+  return name.isEmpty ? 'الكتاب ${index + 1}' : 'كتاب $name';
+}
+
+class _CartBody extends ConsumerWidget {
+  const _CartBody({required this.items});
+  final List<CartItem> items;
+
+  void _retry(WidgetRef ref) {
+    for (final it in items) {
+      ref.invalidate(savedDraftProvider(it.book));
+      ref.invalidate(templatesProvider(it.slug));
+      ref.invalidate(productBySlugProvider(it.slug));
+    }
+    ref.invalidate(publicSettingsProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(publicSettingsProvider);
+    List<CartBook>? books;
+    try {
+      books = watchCartBooks(ref, items);
+      if (settings.hasError) throw settings.error!;
+    } catch (_) {
+      return LoadError(onRetry: () => _retry(ref));
+    }
+    if (books == null || !settings.hasValue) {
+      return const Padding(
+        padding: EdgeInsets.all(NSpace.xxl),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (books.isEmpty) return const _Empty();
+    final quote = quoteCart(books, settings.value!);
+
+    final left = Column(children: [
+      for (var i = 0; i < books.length; i++) ...[
+        _BookCard(book: books[i], title: books.length > 1 ? 'الكتاب ${i + 1} من ${books.length}' : null),
+        const SizedBox(height: NSpace.md),
+        _Extras(book: books[i], settings: settings.value!, quote: quote.books[i]),
+        const SizedBox(height: NSpace.lg),
+      ],
+      _AddChild(slug: books.first.product.slug, settings: settings.value!, count: books.length),
+    ]);
+    final right = _Summary(quote: quote, books: books);
+
+    if (MediaQuery.sizeOf(context).width >= 1000) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: left),
+        const SizedBox(width: NSpace.lg),
+        SizedBox(width: 380, child: right),
+      ]);
+    }
+    return Column(children: [left, const SizedBox(height: NSpace.lg), right]);
+  }
+}
+
+/// Starts another book (another child) of the same product.
+class _AddChild extends ConsumerWidget {
+  const _AddChild({required this.slug, required this.settings, required this.count});
+  final String slug;
+  final PublicSettings settings;
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    if (count >= CartController.maxBooks) return const SizedBox.shrink();
+    final save = settings.priceOf(Addon.childName);
+    return Container(
+      padding: const EdgeInsets.all(NSpace.md),
+      decoration: BoxDecoration(
+        color: NColors.sage.withValues(alpha: .08),
+        borderRadius: const BorderRadius.all(NRadius.lg),
+        border: Border.all(color: NColors.sage.withValues(alpha: .35)),
+      ),
+      child: Builder(builder: (context) {
+        final text = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('عندك أكثر من طفل؟', style: t.titleSmall),
+          Text(
+              save > 0
+                  ? 'صمّمي كتاباً لكل طفل في نفس الطلب، ويصبح تخصيص الغلاف مجانياً لكل كتاب (توفير ${formatIqd(save)} للكتاب).'
+                  : 'صمّمي كتاباً لكل طفل في نفس الطلب.',
+              style: t.bodySmall),
+        ]);
+        final button = FilledButton.tonalIcon(
+          onPressed: () => context.go(Routes.editor(newBookId(slug))),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('كتاب لطفل آخر'),
+        );
+        const icon = Icon(Icons.child_care_rounded, color: NColors.sageDark);
+        if (isMobile(context)) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [icon, const SizedBox(width: NSpace.md), Expanded(child: text)]),
+            const SizedBox(height: NSpace.sm),
+            button,
+          ]);
+        }
+        return Row(children: [
+          icon,
+          const SizedBox(width: NSpace.md),
+          Expanded(child: text),
+          const SizedBox(width: NSpace.sm),
+          button,
+        ]);
+      }),
     );
   }
 }
@@ -72,71 +223,6 @@ class _Empty extends StatelessWidget {
   }
 }
 
-class _CartLine extends ConsumerStatefulWidget {
-  const _CartLine({required this.item});
-  final CartItem item;
-
-  @override
-  ConsumerState<_CartLine> createState() => _CartLineState();
-}
-
-class _CartLineState extends ConsumerState<_CartLine> {
-  @override
-  void initState() {
-    super.initState();
-    ref.read(draftProvider.notifier).load(widget.item.slug);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final slug = widget.item.slug;
-    final draft = ref.watch(draftProvider).draft;
-    final pages = ref.watch(templatesProvider(slug));
-    final product = ref.watch(productBySlugProvider(slug));
-    final settings = ref.watch(publicSettingsProvider);
-
-    if (pages.hasError || product.hasError || settings.hasError) {
-      return LoadError(onRetry: () {
-        ref.invalidate(templatesProvider(slug));
-        ref.invalidate(productBySlugProvider(slug));
-        ref.invalidate(publicSettingsProvider);
-      });
-    }
-    if (draft == null ||
-        draft.productSlug != slug ||
-        !pages.hasValue ||
-        !product.hasValue ||
-        !settings.hasValue) {
-      return const Padding(
-        padding: EdgeInsets.all(NSpace.xxl),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    final p = product.value;
-    if (p == null) {
-      return const Text('هذا المنتج لم يعد متوفراً. احذفيه من السلة.');
-    }
-
-    final item = widget.item;
-    final quote = buildQuote(product: p, settings: settings.value!, draft: draft, item: item, pages: pages.value!);
-    final left = Column(children: [
-      _BookCard(product: p, draft: draft, pages: pages.value!, item: item),
-      const SizedBox(height: NSpace.lg),
-      _Extras(item: item, settings: settings.value!, draft: draft, quote: quote),
-    ]);
-    final right = _Summary(quote: quote);
-
-    if (MediaQuery.sizeOf(context).width >= 1000) {
-      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: left),
-        const SizedBox(width: NSpace.lg),
-        SizedBox(width: 380, child: right),
-      ]);
-    }
-    return Column(children: [left, const SizedBox(height: NSpace.lg), right]);
-  }
-}
-
 BoxDecoration get _card => const BoxDecoration(
       color: NColors.surface,
       borderRadius: BorderRadius.all(NRadius.lg),
@@ -144,11 +230,14 @@ BoxDecoration get _card => const BoxDecoration(
     );
 
 class _BookCard extends ConsumerWidget {
-  const _BookCard({required this.product, required this.draft, required this.pages, required this.item});
-  final Product product;
-  final BookDraft draft;
-  final List<PageTemplate> pages;
-  final CartItem item;
+  const _BookCard({required this.book, this.title});
+  final CartBook book;
+  final String? title;
+
+  Product get product => book.product;
+  BookDraft get draft => book.draft;
+  List<PageTemplate> get pages => book.pages;
+  CartItem get item => book.item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -161,6 +250,7 @@ class _BookCard extends ConsumerWidget {
     final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (title != null) Text(title!, style: t.labelLarge?.copyWith(color: NColors.sageDark)),
         Text(name.isEmpty ? product.title : '${product.title} · $name', style: t.titleLarge),
         const SizedBox(height: NSpace.sm),
         Text('${product.pageCount} صفحة · ${ready.totalSlots - ready.emptySlots} من ${ready.totalSlots} صورة',
@@ -176,12 +266,12 @@ class _BookCard extends ConsumerWidget {
         const SizedBox(height: NSpace.md),
         Wrap(spacing: NSpace.sm, runSpacing: NSpace.sm, children: [
           OutlinedButton.icon(
-            onPressed: () => context.go(Routes.preview(item.slug)),
+            onPressed: () => context.go(Routes.preview(item.book)),
             icon: const Icon(Icons.menu_book_outlined, size: 18),
             label: const Text('معاينة'),
           ),
           OutlinedButton.icon(
-            onPressed: () => context.go(Routes.editor(item.slug)),
+            onPressed: () => context.go(Routes.editor(item.book)),
             icon: const Icon(Icons.edit_outlined, size: 18),
             label: const Text('تعديل'),
           ),
@@ -228,16 +318,18 @@ class _BookCard extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) await ref.read(cartProvider.notifier).remove(item.slug);
+    if (ok == true) await ref.read(cartProvider.notifier).remove(item.book);
   }
 }
 
 class _Extras extends ConsumerWidget {
-  const _Extras({required this.item, required this.settings, required this.draft, required this.quote});
+  const _Extras({required this.book, required this.settings, required this.quote});
+  final CartBook book;
   final Quote quote;
-  final CartItem item;
   final PublicSettings settings;
-  final BookDraft draft;
+
+  CartItem get item => book.item;
+  BookDraft get draft => book.draft;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -246,15 +338,23 @@ class _Extras extends ConsumerWidget {
     final photosLine = quote.lines.where((l) => l.label.startsWith(Addon.photos.label)).firstOrNull;
     String price(Addon a) => settings.priceOf(a) > 0 ? '+ ${formatIqd(settings.priceOf(a))}' : 'السعر قريباً';
 
-    Widget auto(Addon a, String why, {QuoteLine? line}) => ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.check_circle_rounded, color: NColors.sage),
-          title: Text(line?.label ?? a.label),
-          subtitle: Text(why),
-          trailing: Text(
-              line != null && !line.unpriced ? '+ ${formatIqd(line.amount)}' : price(a),
-              style: t.labelLarge),
-        );
+    final free = quote.lines.any((l) => l.free);
+    Widget auto(Addon a, String why, {QuoteLine? line}) {
+      final isFree = free && (a == Addon.childName || a == Addon.designerCover);
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.check_circle_rounded, color: NColors.sage),
+        title: Text(line?.label ?? a.label),
+        subtitle: Text(isFree ? '$why · مجاناً لأن طلبك فيه أكثر من كتاب' : why),
+        trailing: Text(
+            isFree
+                ? 'مجاناً'
+                : line != null && !line.unpriced
+                    ? '+ ${formatIqd(line.amount)}'
+                    : price(a),
+            style: t.labelLarge?.copyWith(color: isFree ? NColors.sageDark : null)),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(NSpace.md),
@@ -272,39 +372,12 @@ class _Extras extends ConsumerWidget {
             title: Text(Addon.giftWrap.label),
             subtitle: Text('${Addon.giftWrap.hint} · ${price(Addon.giftWrap)}'),
           ),
-          const Divider(color: NColors.line),
-          Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(Addon.extraCopy.label, style: t.bodyLarge),
-                Text('${Addon.extraCopy.hint} · ${price(Addon.extraCopy)} للنسخة', style: t.bodySmall),
-              ]),
-            ),
-            IconButton.outlined(
-              tooltip: 'إنقاص',
-              onPressed: item.extraCopies > 0
-                  ? () => cart.update(item.copyWith(extraCopies: item.extraCopies - 1))
-                  : null,
-              icon: const Icon(Icons.remove_rounded),
-            ),
-            SizedBox(
-              width: 36,
-              child: Text('${item.extraCopies}', textAlign: TextAlign.center, style: t.titleMedium),
-            ),
-            IconButton.outlined(
-              tooltip: 'زيادة',
-              onPressed: item.extraCopies < CartItem.maxExtraCopies
-                  ? () => cart.update(item.copyWith(extraCopies: item.extraCopies + 1))
-                  : null,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ]),
           if (draft.hasPrintedText ||
               draft.cover.mode == CoverMode.designer ||
               draft.cover.childName.trim().isNotEmpty ||
               photosLine != null) ...[
             const Divider(color: NColors.line),
-            if (draft.cover.childName.trim().isNotEmpty)
+            if (draft.cover.childName.trim().isNotEmpty && draft.cover.mode != CoverMode.designer)
               auto(Addon.childName, 'أُضيف لأنك كتبتِ اسم طفلك على الغلاف'),
             if (photosLine != null)
               auto(Addon.photos, 'أُضيف لأنك وضعتِ صوراً داخل الكتاب', line: photosLine),
@@ -320,13 +393,15 @@ class _Extras extends ConsumerWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.quote});
-  final Quote quote;
+  const _Summary({required this.quote, required this.books});
+  final OrderQuote quote;
+  final List<CartBook> books;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    String amount(QuoteLine l) => l.unpriced ? 'قريباً' : formatIqd(l.amount);
+    String amount(QuoteLine l) => l.free ? 'مجاناً' : l.unpriced ? 'قريباً' : formatIqd(l.amount);
+    final multi = books.length > 1;
     final priced = !quote.hasUnpriced;
 
     Widget line(String a, String b, {TextStyle? style}) => Padding(
@@ -345,9 +420,19 @@ class _Summary extends StatelessWidget {
         children: [
           Text('ملخص الطلب', style: t.titleMedium),
           const SizedBox(height: NSpace.sm),
-          for (final l in quote.lines)
-            line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
+          for (var i = 0; i < books.length; i++) ...[
+            if (multi)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : NSpace.sm),
+                child: Text(bookTitle(books[i], i), style: t.labelLarge?.copyWith(color: NColors.sageDark)),
+              ),
+            for (final l in quote.books[i].lines)
+              line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
+          ],
           const Divider(height: NSpace.lg, color: NColors.line),
+          if (quote.saved > 0)
+            line('وفّرتِ (غلاف مجاني لكل كتاب)', formatIqd(quote.saved),
+                style: t.bodyMedium?.copyWith(color: NColors.sageDark)),
           line('الإجمالي', priced ? formatIqd(quote.total) : 'قريباً', style: t.titleMedium),
           if (priced && quote.hasDeposit)
             line('العربون', formatIqd(quote.deposit),

@@ -16,8 +16,9 @@ import 'widgets/page_canvas.dart';
 import 'widgets/photo_tray.dart';
 
 class EditorPage extends ConsumerStatefulWidget {
-  const EditorPage({super.key, required this.slug});
-  final String slug;
+  const EditorPage({super.key, required this.book});
+  final String book; // book id: the product slug, or slug~suffix for another child
+  String get slug => slugOfBook(book);
 
   @override
   ConsumerState<EditorPage> createState() => _EditorPageState();
@@ -30,7 +31,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   @override
   void initState() {
     super.initState();
-    ref.read(draftProvider.notifier).load(widget.slug);
+    ref.read(draftProvider.notifier).load(widget.book);
   }
 
   void _go(int i, int count) => setState(() {
@@ -49,11 +50,12 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => LoadError(onRetry: () => ref.invalidate(templatesProvider(widget.slug))),
           data: (pages) {
-            if (draft == null || pages.isEmpty) {
+            if (draft == null || draft.bookId != widget.book || pages.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
             return _EditorBody(
               slug: widget.slug,
+              book: widget.book,
               pages: pages,
               draft: draft,
               index: _index.clamp(0, pages.length - 1),
@@ -71,6 +73,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 class _EditorBody extends ConsumerWidget {
   const _EditorBody({
     required this.slug,
+    required this.book,
     required this.pages,
     required this.draft,
     required this.index,
@@ -79,7 +82,7 @@ class _EditorBody extends ConsumerWidget {
     required this.onSelect,
   });
 
-  final String slug;
+  final String slug, book;
   final List<PageTemplate> pages;
   final BookDraft draft;
   final int index;
@@ -211,7 +214,7 @@ class _EditorBody extends ConsumerWidget {
       filled: filled,
       total: total,
       onBack: () => context.go(Routes.product(slug)),
-      onPreview: () => context.go(Routes.preview(slug)),
+      onPreview: () => context.go(Routes.preview(book)),
     );
 
     final nav = _PageNav(
