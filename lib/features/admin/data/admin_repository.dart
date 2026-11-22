@@ -77,10 +77,18 @@ class AdminOrderRow {
 }
 
 class AdminOrderPage {
-  const AdminOrderPage({this.bookNo = 1, required this.pageNumber, required this.slots, required this.texts});
+  const AdminOrderPage({
+    this.bookNo = 1,
+    required this.pageNumber,
+    required this.slots,
+    required this.texts,
+    this.transforms = const {},
+  });
   final int bookNo;
   final int pageNumber;
   final Map<String, String> slots; // slotId -> storage path
+  /// slotId -> placement inside the frame (scale >= 1, dx/dy as fractions of the frame).
+  final Map<String, ({double scale, double dx, double dy})> transforms;
   final Map<String, String> texts; // textSlotId -> text
 }
 
@@ -88,6 +96,7 @@ class AdminOrderPage {
 class AdminBook {
   const AdminBook({
     required this.no,
+    required this.productId,
     required this.coverMode,
     required this.cover,
     required this.giftWrap,
@@ -95,6 +104,7 @@ class AdminBook {
     required this.pages,
   });
   final int no;
+  final String productId;
   final String coverMode;
   final Map<String, dynamic> cover;
   final bool giftWrap;
@@ -242,7 +252,7 @@ class AdminRepository {
   Future<AdminOrder> order(String id) async {
     final o = await _db
         .from('orders')
-        .select('${AdminOrderRow.columns},address,notes,cover_mode,cover_config,price_snapshot,printed_at,images_purged_at')
+        .select('${AdminOrderRow.columns},address,notes,product_id,cover_mode,cover_config,price_snapshot,printed_at,images_purged_at')
         .eq('id', id)
         .single();
     final pageRows = await _db
@@ -253,7 +263,7 @@ class AdminRepository {
         .order('page_number');
     final bookRows = await _db
         .from('order_books')
-        .select('book_no,cover_mode,cover_config,gift_wrap,subtotal')
+        .select('book_no,product_id,cover_mode,cover_config,gift_wrap,subtotal')
         .eq('order_id', id)
         .order('book_no');
     final hist = await _db.from('order_status_history').select('to_status,note,at').eq('order_id', id).order('at');
@@ -265,6 +275,11 @@ class AdminRepository {
               slots: ((p['slots'] as Map?) ?? const {})
                   .map((k, v) => MapEntry(k as String, ((v as Map)['photo_path'] as String?) ?? '')),
               texts: ((p['texts'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, '$v')),
+              transforms: ((p['slots'] as Map?) ?? const {}).map((k, v) {
+                final m = v as Map;
+                double n(Object? x, double d) => (x as num?)?.toDouble() ?? d;
+                return MapEntry(k as String, (scale: n(m['scale'], 1), dx: n(m['dx'], 0), dy: n(m['dy'], 0)));
+              }),
             ))
         .toList();
     Map<String, dynamic> map(Object? v) => Map<String, dynamic>.from((v as Map?) ?? const {});
@@ -273,6 +288,7 @@ class AdminRepository {
         ? [
             AdminBook(
               no: 1,
+              productId: o['product_id'] as String,
               coverMode: (o['cover_mode'] as String?) ?? 'manual',
               cover: map(o['cover_config']),
               giftWrap: false,
@@ -284,6 +300,7 @@ class AdminRepository {
             for (final b in bookRows)
               AdminBook(
                 no: (b['book_no'] as num).toInt(),
+                productId: b['product_id'] as String,
                 coverMode: (b['cover_mode'] as String?) ?? 'manual',
                 cover: map(b['cover_config']),
                 giftWrap: b['gift_wrap'] == true,
@@ -379,6 +396,46 @@ class AdminRepository {
     await _db.storage.from('templates').uploadBinary(path, bytes,
         fileOptions: FileOptions(contentType: contentType, upsert: false, cacheControl: '31536000'));
     return path;
+  }
+
+  // ---------- print files ----------
+  /// Templates of a product with their print files (admin read).
+  Future<List<PageTemplate>> printTemplates(String productId) async {
+    final rows = await _db
+        .from('page_templates')
+        .select('${PageTemplate.columns},print_path')
+        .eq('product_id', productId)
+        .order('page_number');
+    return rows.map(PageTemplate.fromJson).toList();
+  }
+
+  Future<List<PageTemplate>> printTemplatesBySlug(String slug) async {
+    final rows = await _db
+        .from('page_templates')
+        .select('${PageTemplate.columns},print_path,product:products!inner(slug)')
+        .eq('product.slug', slug)
+        .order('page_number');
+    return rows.map(PageTemplate.fromJson).toList();
+  }
+
+  Future<String> productSlug(String productId) async =>
+      (await _db.from('products').select('slug').eq('id', productId).single())['slug'] as String;
+
+  Future<Uint8List> download(String bucket, String path) => _db.storage.from(bucket).download(path);
+
+  /// Uploads a 300 DPI page design and links it to its template.
+  Future<void> uploadPrintFile(PageTemplate t, String slug, Uint8List bytes, String contentType) async {
+    final ext = contentType.contains('png') ? 'png' : 'jpg';
+    final name = t.isCover ? 'cover' : 'p${t.pageNumber.toString().padLeft(2, '0')}';
+    final path = '$slug/$name-${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _db.storage.from('print-files').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: contentType, upsert: false));
+    await _db.from('page_templates').update({'print_path': path}).eq('id', t.id);
+    if (t.printPath != null) {
+      try {
+        await _db.storage.from('print-files').remove([t.printPath!]);
+      } catch (_) {}
+    }
   }
 
   // ---------- team (owner) ----------

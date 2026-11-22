@@ -10,6 +10,7 @@ import '../../data/models/order.dart';
 import 'admin_orders_page.dart';
 import 'admin_shell.dart';
 import 'data/admin_repository.dart';
+import 'print/print_dialog.dart';
 
 final adminOrderProvider =
     FutureProvider.autoDispose.family<AdminOrder, String>((ref, id) => ref.watch(adminRepositoryProvider).order(id));
@@ -108,6 +109,13 @@ class _Details extends ConsumerWidget {
           ),
           const Spacer(),
           Text(shortDate(r.createdAt), style: t.bodySmall),
+          const SizedBox(width: NSpace.md),
+          if (order.imagesPurgedAt == null)
+            FilledButton.tonalIcon(
+              onPressed: () => showPrintDialog(context, order),
+              icon: const Icon(Icons.print_rounded, size: 18),
+              label: const Text('ملفات الطباعة'),
+            ),
         ]),
         const SizedBox(height: NSpace.md),
         if (wide)
