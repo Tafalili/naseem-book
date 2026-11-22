@@ -160,7 +160,8 @@ class _OrderTile extends StatelessWidget {
                   ]),
                   const SizedBox(height: 2),
                   Text(
-                    '${row.customerName} · ${row.city}${(row.childName ?? '').isNotEmpty ? ' · 👶 ${row.childName}' : ''}',
+                    '${row.customerName} · ${row.city}${(row.childName ?? '').isNotEmpty ? ' · 👶 ${row.childName}' : ''}'
+                    '${row.bookCount > 1 ? ' · 📚 ${row.bookCount} كتب' : ''}',
                     overflow: TextOverflow.ellipsis,
                     style: t.bodyMedium,
                   ),

@@ -77,9 +77,16 @@ class _Details extends ConsumerWidget {
       const SizedBox(height: NSpace.md),
       _PriceCard(order: order),
     ];
+    final multi = order.books.length > 1;
     final right = [
-      _BookCard(order: order),
-      const SizedBox(height: NSpace.md),
+      for (final b in order.books) ...[
+        _BookCard(
+          order: order,
+          book: b,
+          title: multi ? 'الكتاب ${b.no} من ${order.books.length}${b.childName.isEmpty ? '' : ' · ${b.childName}'}' : 'الكتاب',
+        ),
+        const SizedBox(height: NSpace.md),
+      ],
       _HistoryCard(order: order),
     ];
 
@@ -446,13 +453,25 @@ class _PriceCard extends StatelessWidget {
     return AdminCard(
       title: 'الحساب',
       child: Column(children: [
-        for (final l in order.lines)
+        for (final (i, l) in order.lines.indexed) ...[
+          if (order.books.length > 1 && l['key'] == 'book')
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : NSpace.sm),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(_bookLabel(order, (l['book_no'] as num?)?.toInt() ?? 1),
+                    style: t.labelLarge?.copyWith(color: NColors.sageDark)),
+              ),
+            ),
           line(
             '${_lineLabels[l['key']] ?? l['key']}'
             '${l['filled'] != null ? ' (${l['filled']} صورة)' : ''}'
             '${((l['qty'] as num?) ?? 1) > 1 ? ' × ${l['qty']}' : ''}',
-            formatIqd(((l['unit'] as num?) ?? 0) * ((l['qty'] as num?) ?? 1)),
+            l['free'] == true
+                ? 'مجاناً (بدل ${formatIqd((l['list_unit'] as num?) ?? 0)})'
+                : formatIqd(((l['unit'] as num?) ?? 0) * ((l['qty'] as num?) ?? 1)),
           ),
+        ],
         const Divider(color: NColors.line),
         line('الإجمالي', formatIqd(order.row.total), style: t.titleSmall),
         line('العربون', formatIqd(order.row.depositAmount)),
@@ -462,21 +481,29 @@ class _PriceCard extends StatelessWidget {
   }
 }
 
+String _bookLabel(AdminOrder o, int no) {
+  final b = o.books.where((b) => b.no == no).firstOrNull;
+  final name = b?.childName ?? '';
+  return name.isEmpty ? 'الكتاب $no' : 'الكتاب $no · $name';
+}
+
 class _BookCard extends ConsumerWidget {
-  const _BookCard({required this.order});
+  const _BookCard({required this.order, required this.book, required this.title});
   final AdminOrder order;
+  final AdminBook book;
+  final String title;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
     final files = ref.watch(_filesProvider(order.row.id));
     final photos = files.value?.photos ?? const {};
-    final cover = order.cover;
+    final cover = book.cover;
     final name = (cover['child_name'] as String?) ?? '';
     final designerNotes = (cover['designer_notes'] as String?) ?? '';
     final el = cover['element'];
     final coverPhoto = el is Map ? photos[el['photo_path']] : null;
-    final photoCount = order.pages.fold(0, (n, p) => n + p.slots.length);
+    final photoCount = book.pages.fold(0, (n, p) => n + p.slots.length);
 
     Widget thumb(String? url, String label) => Column(children: [
           AspectRatio(
@@ -496,10 +523,11 @@ class _BookCard extends ConsumerWidget {
         ]);
 
     return AdminCard(
-      title: 'الكتاب',
+      title: title,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(name.isEmpty ? 'بدون اسم على الغلاف' : 'الاسم على الغلاف: $name', style: t.titleSmall),
-        Text(order.coverMode == 'designer' ? 'الغلاف: «اتركه لذوقكم»' : 'الغلاف: من تصميم الزبون', style: t.bodyMedium),
+        if (book.giftWrap) Text('🎁 تغليف هدية', style: t.bodyMedium),
+        Text(book.coverMode == 'designer' ? 'الغلاف: «اتركه لذوقكم»' : 'الغلاف: من تصميم الزبون', style: t.bodyMedium),
         if ((cover['font'] as String? ?? '').isNotEmpty) Text('الخط: ${cover['font']}', style: t.bodySmall),
         if (designerNotes.isNotEmpty) Text('ملاحظات للمصمم: $designerNotes', style: t.bodyMedium),
         if (coverPhoto != null) ...[
@@ -516,7 +544,7 @@ class _BookCard extends ConsumerWidget {
           LayoutBuilder(builder: (context, c) {
             final cols = (c.maxWidth / 120).floor().clamp(2, 8);
             final items = [
-              for (final p in order.pages)
+              for (final p in book.pages)
                 for (final e in p.slots.entries) (url: photos[e.value], label: 'ص ${p.pageNumber}'),
             ];
             return GridView.count(
@@ -530,10 +558,10 @@ class _BookCard extends ConsumerWidget {
             );
           }),
         ],
-        if (order.pages.any((p) => p.texts.isNotEmpty)) ...[
+        if (book.pages.any((p) => p.texts.isNotEmpty)) ...[
           const SizedBox(height: NSpace.md),
           Text('النصوص المطبوعة', style: t.titleSmall),
-          for (final p in order.pages)
+          for (final p in book.pages)
             for (final e in p.texts.entries)
               Padding(
                 padding: const EdgeInsets.only(top: NSpace.xs),

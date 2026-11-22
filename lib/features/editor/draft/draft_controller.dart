@@ -24,31 +24,21 @@ class DraftState {
 }
 
 class DraftController extends Notifier<DraftState> {
-  static String _key(String slug) => 'draft:$slug';
+  static String _key(String bookId) => 'draft:$bookId';
   final _rand = math.Random();
 
   @override
   DraftState build() => const DraftState();
 
-  Future<void> load(String slug) async {
-    if (state.draft?.productSlug == slug) return;
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(slug));
-    BookDraft draft;
-    try {
-      draft = raw == null
-          ? BookDraft(productSlug: slug)
-          : BookDraft.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-    } catch (_) {
-      draft = BookDraft(productSlug: slug);
-    }
-    state = DraftState(draft: draft);
+  Future<void> load(String bookId) async {
+    if (state.draft?.bookId == bookId) return;
+    state = DraftState(draft: await readDraft(bookId));
   }
 
   Future<void> _save(BookDraft d) async {
     state = state.copyWith(draft: d);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key(d.productSlug), jsonEncode(d.toJson()));
+    await prefs.setString(_key(d.bookId), jsonEncode(d.toJson()));
   }
 
   BookDraft get _d => state.draft!;
@@ -132,9 +122,9 @@ class DraftController extends Notifier<DraftState> {
   Future<void> updateCover(CoverDesign cover) => _save(_d.copyWith(cover: cover));
 
   /// After a successful order: drop the local draft and its photos.
-  Future<void> discard(String slug) async {
+  Future<void> discard(String bookId) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(slug));
+    final raw = prefs.getString(_key(bookId));
     if (raw != null) {
       try {
         final d = BookDraft.fromJson(jsonDecode(raw) as Map<String, dynamic>);
@@ -143,10 +133,32 @@ class DraftController extends Notifier<DraftState> {
         }
       } catch (_) {}
     }
-    await prefs.remove(_key(slug));
-    if (state.draft?.productSlug == slug) state = DraftState(draft: BookDraft(productSlug: slug));
+    await prefs.remove(_key(bookId));
+    if (state.draft?.bookId == bookId) {
+      state = DraftState(draft: BookDraft(productSlug: slugOfBook(bookId), bookId: bookId));
+    }
   }
 }
+
+/// Reads a saved draft without making it the editor's active one.
+Future<BookDraft> readDraft(String bookId) async {
+  final raw = (await SharedPreferences.getInstance()).getString(DraftController._key(bookId));
+  final fresh = BookDraft(productSlug: slugOfBook(bookId), bookId: bookId);
+  if (raw == null) return fresh;
+  try {
+    final d = BookDraft.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    return d.bookId == bookId ? d : fresh;
+  } catch (_) {
+    return fresh;
+  }
+}
+
+/// Saved drafts by book id (cart and checkout show several books at once).
+final savedDraftProvider = FutureProvider.autoDispose.family<BookDraft, String>((ref, bookId) {
+  // Re-read whenever the editor saves this book.
+  ref.watch(draftProvider.select((s) => s.draft?.bookId == bookId ? s.draft : null));
+  return readDraft(bookId);
+});
 
 final draftProvider = NotifierProvider<DraftController, DraftState>(DraftController.new);
 

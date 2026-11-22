@@ -18,8 +18,9 @@ import '../editor/widgets/page_canvas.dart';
 /// Flip-through preview of the finished book: cover, endpaper, 34 pages,
 /// endpaper, back cover. Right-to-left, two-page spreads on wide screens.
 class PreviewPage extends ConsumerStatefulWidget {
-  const PreviewPage({super.key, required this.slug});
-  final String slug;
+  const PreviewPage({super.key, required this.book});
+  final String book; // book id: the product slug, or slug~suffix for another child
+  String get slug => slugOfBook(book);
 
   @override
   ConsumerState<PreviewPage> createState() => _PreviewPageState();
@@ -32,7 +33,7 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
   @override
   void initState() {
     super.initState();
-    ref.read(draftProvider.notifier).load(widget.slug);
+    ref.read(draftProvider.notifier).load(widget.book);
   }
 
   @override
@@ -47,7 +48,7 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
         ref.invalidate(templatesProvider(widget.slug));
         ref.invalidate(productBySlugProvider(widget.slug));
       });
-    } else if (draft == null || !pages.hasValue || !product.hasValue) {
+    } else if (draft == null || draft.bookId != widget.book || !pages.hasValue || !product.hasValue) {
       body = const Center(child: CircularProgressIndicator());
     } else if (product.value == null) {
       body = const Center(child: Text('هذا المنتج غير متوفر حالياً'));
@@ -144,14 +145,14 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
     final summary = _Summary(
       draft: draft,
       ready: ready,
-      inCart: ref.watch(cartProvider).any((e) => e.slug == widget.slug),
-      onEdit: () => context.go(Routes.editor(widget.slug)),
+      inCart: ref.watch(cartProvider).any((e) => e.book == widget.book),
+      onEdit: () => context.go(Routes.editor(widget.book)),
       onAdd: () => _addToCart(context, ready),
       onCart: () => context.go(Routes.cart),
     );
 
     final wide = MediaQuery.sizeOf(context).width >= 1000;
-    final top = _TopBar(onBack: () => context.go(Routes.editor(widget.slug)));
+    final top = _TopBar(onBack: () => context.go(Routes.editor(widget.book)));
 
     if (wide) {
       return Column(children: [
@@ -220,7 +221,7 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
       );
       if (ok == null || !context.mounted) return;
       if (!ok) {
-        context.go(Routes.editor(widget.slug));
+        context.go(Routes.editor(widget.book));
         return;
       }
     }
@@ -241,11 +242,11 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
       );
       if (ok == null || !context.mounted) return;
       if (!ok) {
-        context.go(Routes.editor(widget.slug));
+        context.go(Routes.editor(widget.book));
         return;
       }
     }
-    await ref.read(cartProvider.notifier).add(widget.slug);
+    await ref.read(cartProvider.notifier).add(widget.book);
     if (context.mounted) context.go(Routes.cart);
   }
 }

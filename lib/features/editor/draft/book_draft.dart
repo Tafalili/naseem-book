@@ -122,17 +122,24 @@ class CoverDesign {
       );
 }
 
+/// A customer can design several books (one per child) of the same product.
+/// The first book's id is the product slug; later ones are `slug~suffix`.
+String slugOfBook(String bookId) => bookId.split('~').first;
+String newBookId(String slug) => '$slug~${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
+
 class BookDraft {
   const BookDraft({
     required this.productSlug,
+    String? bookId,
     this.photos = const [],
     this.placements = const {},
     this.texts = const {},
     this.cover = const CoverDesign(),
     this.updatedAt,
-  });
+  }) : bookId = bookId ?? productSlug;
 
   final String productSlug;
+  final String bookId;
   final List<PhotoRef> photos;
   final Map<String, Placement> placements; // slotId -> placement
   final Map<String, String> texts; // textSlotId -> printed text
@@ -162,6 +169,7 @@ class BookDraft {
   }) =>
       BookDraft(
         productSlug: productSlug,
+        bookId: bookId,
         photos: photos ?? this.photos,
         placements: placements ?? this.placements,
         texts: texts ?? this.texts,
@@ -172,6 +180,7 @@ class BookDraft {
   Map<String, dynamic> toJson() => {
         'v': 1,
         'slug': productSlug,
+        'book': bookId,
         'photos': photos.map((p) => p.toJson()).toList(),
         'placements': placements.map((k, v) => MapEntry(k, v.toJson())),
         'texts': texts,
@@ -181,6 +190,7 @@ class BookDraft {
 
   factory BookDraft.fromJson(Map<String, dynamic> j) => BookDraft(
         productSlug: j['slug'] as String,
+        bookId: j['book'] as String?,
         photos: ((j['photos'] as List?) ?? const [])
             .map((e) => PhotoRef.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),

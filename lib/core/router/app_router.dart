@@ -17,8 +17,9 @@ abstract final class Routes {
   static const home = '/';
   static const styleGuide = '/style';
   static String product(String slug) => '/p/$slug';
-  static String editor(String slug) => '/design/$slug';
-  static String preview(String slug) => '/design/$slug/preview';
+  /// [book] is a book id: the product slug, or `slug~suffix` for another child.
+  static String editor(String book) => '/design/$book';
+  static String preview(String book) => '/design/$book/preview';
   static const cart = '/cart';
   static const checkout = '/checkout';
   static const track = '/track';
@@ -64,12 +65,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
-        path: '/design/:slug',
-        builder: (_, s) => EditorPage(slug: s.pathParameters['slug']!),
+        path: '/design/:book',
+        builder: (_, s) => EditorPage(book: s.pathParameters['book']!),
         routes: [
           GoRoute(
             path: 'preview',
-            builder: (_, s) => PreviewPage(slug: s.pathParameters['slug']!),
+            builder: (_, s) => PreviewPage(book: s.pathParameters['book']!),
           ),
         ],
       ),

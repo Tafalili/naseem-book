@@ -46,6 +46,7 @@ class AdminOrderRow {
     required this.depositAmount,
     required this.createdAt,
     required this.hasReceipt,
+    this.bookCount = 1,
   });
 
   final String id, code, customerName, phone, city;
@@ -54,9 +55,10 @@ class AdminOrderRow {
   final int total, depositAmount;
   final DateTime createdAt;
   final bool hasReceipt;
+  final int bookCount;
 
   static const columns =
-      'id,order_code,status,customer_name,phone,city,child_name,total,deposit_amount,created_at,receipt_path';
+      'id,order_code,status,customer_name,phone,city,child_name,total,deposit_amount,created_at,receipt_path,book_count';
 
   factory AdminOrderRow.fromJson(Map<String, dynamic> j) => AdminOrderRow(
         id: j['id'] as String,
@@ -70,14 +72,36 @@ class AdminOrderRow {
         depositAmount: (j['deposit_amount'] as num?)?.toInt() ?? 0,
         createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
         hasReceipt: j['receipt_path'] != null,
+        bookCount: (j['book_count'] as num?)?.toInt() ?? 1,
       );
 }
 
 class AdminOrderPage {
-  const AdminOrderPage({required this.pageNumber, required this.slots, required this.texts});
+  const AdminOrderPage({this.bookNo = 1, required this.pageNumber, required this.slots, required this.texts});
+  final int bookNo;
   final int pageNumber;
   final Map<String, String> slots; // slotId -> storage path
   final Map<String, String> texts; // textSlotId -> text
+}
+
+/// One book (one child) of an order.
+class AdminBook {
+  const AdminBook({
+    required this.no,
+    required this.coverMode,
+    required this.cover,
+    required this.giftWrap,
+    required this.subtotal,
+    required this.pages,
+  });
+  final int no;
+  final String coverMode;
+  final Map<String, dynamic> cover;
+  final bool giftWrap;
+  final int subtotal;
+  final List<AdminOrderPage> pages;
+
+  String get childName => ((cover['child_name'] as String?) ?? '').trim();
 }
 
 class AdminOrder {
@@ -85,34 +109,32 @@ class AdminOrder {
     required this.row,
     required this.address,
     required this.notes,
-    required this.coverMode,
-    required this.cover,
+    required this.books,
     required this.lines,
     required this.receiptPath,
     required this.printedAt,
     required this.imagesPurgedAt,
-    required this.pages,
     required this.history,
   });
 
   final AdminOrderRow row;
   final String address;
   final String? notes;
-  final String coverMode;
-  final Map<String, dynamic> cover;
-  final List<Map<String, dynamic>> lines; // price_snapshot.lines
+  final List<AdminBook> books;
+  final List<Map<String, dynamic>> lines; // price_snapshot.lines (each has book_no on multi-book orders)
   final String? receiptPath;
   final DateTime? printedAt, imagesPurgedAt;
-  final List<AdminOrderPage> pages;
   final List<StatusEvent> history;
 
-  /// Every private file of this order (photos, cover photo, receipt).
+  /// Every private photo of this order (page photos and cover photos of every book).
   Iterable<String> get photoPaths sync* {
-    for (final p in pages) {
-      yield* p.slots.values;
+    for (final b in books) {
+      for (final p in b.pages) {
+        yield* p.slots.values;
+      }
+      final el = b.cover['element'];
+      if (el is Map && el['photo_path'] is String) yield el['photo_path'] as String;
     }
-    final el = cover['element'];
-    if (el is Map && el['photo_path'] is String) yield el['photo_path'] as String;
   }
 }
 
@@ -223,29 +245,63 @@ class AdminRepository {
         .select('${AdminOrderRow.columns},address,notes,cover_mode,cover_config,price_snapshot,printed_at,images_purged_at')
         .eq('id', id)
         .single();
-    final pages = await _db.from('order_pages').select('page_number,slots,texts').eq('order_id', id).order('page_number');
+    final pageRows = await _db
+        .from('order_pages')
+        .select('book_no,page_number,slots,texts')
+        .eq('order_id', id)
+        .order('book_no')
+        .order('page_number');
+    final bookRows = await _db
+        .from('order_books')
+        .select('book_no,cover_mode,cover_config,gift_wrap,subtotal')
+        .eq('order_id', id)
+        .order('book_no');
     final hist = await _db.from('order_status_history').select('to_status,note,at').eq('order_id', id).order('at');
     DateTime? dt(Object? v) => v == null ? null : DateTime.parse(v as String).toLocal();
+    final pages = pageRows
+        .map((p) => AdminOrderPage(
+              bookNo: (p['book_no'] as num?)?.toInt() ?? 1,
+              pageNumber: (p['page_number'] as num).toInt(),
+              slots: ((p['slots'] as Map?) ?? const {})
+                  .map((k, v) => MapEntry(k as String, ((v as Map)['photo_path'] as String?) ?? '')),
+              texts: ((p['texts'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, '$v')),
+            ))
+        .toList();
+    Map<String, dynamic> map(Object? v) => Map<String, dynamic>.from((v as Map?) ?? const {});
+    final books = bookRows.isEmpty
+        // orders placed before multi-book orders: one book on the order row
+        ? [
+            AdminBook(
+              no: 1,
+              coverMode: (o['cover_mode'] as String?) ?? 'manual',
+              cover: map(o['cover_config']),
+              giftWrap: false,
+              subtotal: (o['total'] as num?)?.toInt() ?? 0,
+              pages: pages,
+            ),
+          ]
+        : [
+            for (final b in bookRows)
+              AdminBook(
+                no: (b['book_no'] as num).toInt(),
+                coverMode: (b['cover_mode'] as String?) ?? 'manual',
+                cover: map(b['cover_config']),
+                giftWrap: b['gift_wrap'] == true,
+                subtotal: (b['subtotal'] as num?)?.toInt() ?? 0,
+                pages: pages.where((p) => p.bookNo == (b['book_no'] as num).toInt()).toList(),
+              ),
+          ];
     return AdminOrder(
       row: AdminOrderRow.fromJson(o),
       address: (o['address'] as String?) ?? '',
       notes: o['notes'] as String?,
-      coverMode: (o['cover_mode'] as String?) ?? 'manual',
-      cover: Map<String, dynamic>.from((o['cover_config'] as Map?) ?? const {}),
+      books: books,
       lines: (((o['price_snapshot'] as Map?)?['lines'] as List?) ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
       receiptPath: o['receipt_path'] as String?,
       printedAt: dt(o['printed_at']),
       imagesPurgedAt: dt(o['images_purged_at']),
-      pages: pages
-          .map((p) => AdminOrderPage(
-                pageNumber: (p['page_number'] as num).toInt(),
-                slots: ((p['slots'] as Map?) ?? const {}).map(
-                    (k, v) => MapEntry(k as String, ((v as Map)['photo_path'] as String?) ?? '')),
-                texts: ((p['texts'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, '$v')),
-              ))
-          .toList(),
       history: hist.map(StatusEvent.fromJson).toList(),
     );
   }

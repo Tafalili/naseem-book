@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models/page_template.dart';
+import '../cart/cart_page.dart' show CartBook;
 import '../../data/repositories/order_repository.dart';
 import '../cart/cart_controller.dart';
 import '../editor/draft/book_draft.dart';
@@ -33,22 +34,17 @@ class CheckoutController extends Notifier<CheckoutState> {
   @override
   CheckoutState build() => const CheckoutState();
 
-  Future<String?> submit({
-    required BookDraft draft,
-    required List<PageTemplate> pages,
-    required CartItem item,
-    required CustomerInfo customer,
-  }) async {
+  Future<String?> submit({required List<CartBook> books, required CustomerInfo customer}) async {
     final repo = ref.read(orderRepositoryProvider);
     state = const CheckoutState(busy: true, stage: 'نجهّز طلبك…');
     try {
       final uid = await repo.ensureSession();
       final batch = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
 
+      // Photo ids are unique per device, so one map serves every book.
       final used = <String>{
-        ...draft.placements.values.map((p) => p.photoId),
-        if (draft.cover.element != null) draft.cover.element!.photoId,
-      }.where((id) => draft.photos.any((p) => p.id == id)).toList();
+        for (final b in books) ...b.draft.usedPhotoIds.where((id) => b.draft.photos.any((p) => p.id == id)),
+      }.toList();
 
       final paths = <String, String>{};
       state = CheckoutState(busy: true, toUpload: used.length, stage: 'نرفع صورك بأمان…');
@@ -62,60 +58,20 @@ class CheckoutController extends Notifier<CheckoutState> {
             busy: true, uploaded: paths.length, toUpload: used.length, stage: 'نرفع صورك بأمان…');
       }
 
-      final pagePayload = <Map<String, dynamic>>[];
-      for (final p in pages.where((p) => !p.isCover)) {
-        final slots = <String, dynamic>{
-          for (final s in p.photoSlots)
-            if (draft.placements[s.id] != null && paths[draft.placements[s.id]!.photoId] != null)
-              s.id: {
-                'photo_path': paths[draft.placements[s.id]!.photoId],
-                'scale': draft.placements[s.id]!.scale,
-                'dx': draft.placements[s.id]!.dx,
-                'dy': draft.placements[s.id]!.dy,
-              },
-        };
-        final texts = <String, dynamic>{
-          for (final t in p.textSlots)
-            if (t.kind == TextKind.memory && (draft.texts[t.id] ?? '').trim().isNotEmpty)
-              t.id: draft.texts[t.id]!.trim(),
-        };
-        if (slots.isNotEmpty || texts.isNotEmpty) {
-          pagePayload.add({'page_number': p.pageNumber, 'slots': slots, 'texts': texts});
-        }
-      }
-
-      final c = draft.cover;
-      final el = c.element;
       state = const CheckoutState(busy: true, stage: 'نرسل الطلب…');
       final res = await repo.submit({
-        'product_slug': draft.productSlug,
         'customer_name': customer.name,
         'phone': customer.phone,
         'city': customer.city,
         'address': customer.address,
         'notes': customer.notes,
-        'gift_wrap': item.giftWrap,
-        'extra_copies': item.extraCopies,
-        'cover': {
-          'mode': c.mode == CoverMode.designer ? 'designer' : 'manual',
-          'child_name': c.childName.trim(),
-          'font': c.font,
-          'color': c.color,
-          'designer_notes': c.designerNotes,
-          if (el != null && paths[el.photoId] != null)
-            'element': {
-              'photo_path': paths[el.photoId],
-              'cx': el.cx,
-              'cy': el.cy,
-              'width': el.width,
-              'rotation': el.rotation,
-            },
-        },
-        'pages': pagePayload,
+        'books': [for (final b in books) _bookPayload(b, paths)],
       });
 
-      await ref.read(cartProvider.notifier).remove(item.slug);
-      await ref.read(draftProvider.notifier).discard(item.slug);
+      for (final b in books) {
+        await ref.read(cartProvider.notifier).remove(b.item.book);
+        await ref.read(draftProvider.notifier).discard(b.item.book);
+      }
       await rememberOrder(res.code);
       state = const CheckoutState();
       return res.code;
@@ -126,6 +82,52 @@ class CheckoutController extends Notifier<CheckoutState> {
     }
     return null;
   }
+}
+
+Map<String, dynamic> _bookPayload(CartBook b, Map<String, String> paths) {
+  final draft = b.draft;
+  final pagePayload = <Map<String, dynamic>>[];
+  for (final p in b.pages.where((p) => !p.isCover)) {
+    final slots = <String, dynamic>{
+      for (final s in p.photoSlots)
+        if (draft.placements[s.id] != null && paths[draft.placements[s.id]!.photoId] != null)
+          s.id: {
+            'photo_path': paths[draft.placements[s.id]!.photoId],
+            'scale': draft.placements[s.id]!.scale,
+            'dx': draft.placements[s.id]!.dx,
+            'dy': draft.placements[s.id]!.dy,
+          },
+    };
+    final texts = <String, dynamic>{
+      for (final t in p.textSlots)
+        if (t.kind == TextKind.memory && (draft.texts[t.id] ?? '').trim().isNotEmpty) t.id: draft.texts[t.id]!.trim(),
+    };
+    if (slots.isNotEmpty || texts.isNotEmpty) {
+      pagePayload.add({'page_number': p.pageNumber, 'slots': slots, 'texts': texts});
+    }
+  }
+  final c = draft.cover;
+  final el = c.element;
+  return {
+    'product_slug': draft.productSlug,
+    'gift_wrap': b.item.giftWrap,
+    'cover': {
+      'mode': c.mode == CoverMode.designer ? 'designer' : 'manual',
+      'child_name': c.childName.trim(),
+      'font': c.font,
+      'color': c.color,
+      'designer_notes': c.designerNotes,
+      if (el != null && paths[el.photoId] != null)
+        'element': {
+          'photo_path': paths[el.photoId],
+          'cx': el.cx,
+          'cy': el.cy,
+          'width': el.width,
+          'rotation': el.rotation,
+        },
+    },
+    'pages': pagePayload,
+  };
 }
 
 final checkoutProvider = NotifierProvider<CheckoutController, CheckoutState>(CheckoutController.new);
