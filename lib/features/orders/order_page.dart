@@ -175,7 +175,7 @@ class _AmountsCard extends StatelessWidget {
       child: Column(children: [
         line('الإجمالي', order.total > 0 ? formatIqd(order.total) : 'يُحدد عند التأكيد'),
         if (order.depositAmount > 0)
-          line('العربون (${order.depositPercent.round()}%)', formatIqd(order.depositAmount)),
+          line('العربون', formatIqd(order.depositAmount)),
         if (order.depositAmount > 0)
           line('المتبقي عند الاستلام', formatIqd(order.total - order.depositAmount)),
       ]),

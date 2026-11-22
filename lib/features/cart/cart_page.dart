@@ -118,11 +118,11 @@ class _CartLineState extends ConsumerState<_CartLine> {
     }
 
     final item = widget.item;
-    final quote = buildQuote(product: p, settings: settings.value!, draft: draft, item: item);
+    final quote = buildQuote(product: p, settings: settings.value!, draft: draft, item: item, pages: pages.value!);
     final left = Column(children: [
       _BookCard(product: p, draft: draft, pages: pages.value!, item: item),
       const SizedBox(height: NSpace.lg),
-      _Extras(item: item, settings: settings.value!, draft: draft),
+      _Extras(item: item, settings: settings.value!, draft: draft, quote: quote),
     ]);
     final right = _Summary(quote: quote);
 
@@ -233,7 +233,8 @@ class _BookCard extends ConsumerWidget {
 }
 
 class _Extras extends ConsumerWidget {
-  const _Extras({required this.item, required this.settings, required this.draft});
+  const _Extras({required this.item, required this.settings, required this.draft, required this.quote});
+  final Quote quote;
   final CartItem item;
   final PublicSettings settings;
   final BookDraft draft;
@@ -242,14 +243,17 @@ class _Extras extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
     final cart = ref.read(cartProvider.notifier);
+    final photosLine = quote.lines.where((l) => l.label.startsWith(Addon.photos.label)).firstOrNull;
     String price(Addon a) => settings.priceOf(a) > 0 ? '+ ${formatIqd(settings.priceOf(a))}' : 'السعر قريباً';
 
-    Widget auto(Addon a, String why) => ListTile(
+    Widget auto(Addon a, String why, {QuoteLine? line}) => ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.check_circle_rounded, color: NColors.sage),
-          title: Text(a.label),
+          title: Text(line?.label ?? a.label),
           subtitle: Text(why),
-          trailing: Text(price(a), style: t.labelLarge),
+          trailing: Text(
+              line != null && !line.unpriced ? '+ ${formatIqd(line.amount)}' : price(a),
+              style: t.labelLarge),
         );
 
     return Container(
@@ -298,12 +302,12 @@ class _Extras extends ConsumerWidget {
           if (draft.hasPrintedText ||
               draft.cover.mode == CoverMode.designer ||
               draft.cover.childName.trim().isNotEmpty ||
-              draft.placements.isNotEmpty) ...[
+              photosLine != null) ...[
             const Divider(color: NColors.line),
             if (draft.cover.childName.trim().isNotEmpty)
               auto(Addon.childName, 'أُضيف لأنك كتبتِ اسم طفلك على الغلاف'),
-            if (draft.placements.isNotEmpty)
-              auto(Addon.photos, 'أُضيف لأنك وضعتِ صوراً داخل الكتاب'),
+            if (photosLine != null)
+              auto(Addon.photos, 'أُضيف لأنك وضعتِ صوراً داخل الكتاب', line: photosLine),
             if (draft.hasPrintedText)
               auto(Addon.printedText, 'أُضيف لأنك كتبتِ نصاً داخل الصفحات'),
             if (draft.cover.mode == CoverMode.designer)
@@ -345,8 +349,8 @@ class _Summary extends StatelessWidget {
             line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, amount(l)),
           const Divider(height: NSpace.lg, color: NColors.line),
           line('الإجمالي', priced ? formatIqd(quote.total) : 'قريباً', style: t.titleMedium),
-          if (priced && quote.depositPercent > 0)
-            line('العربون (${quote.depositPercent.round()}%)', formatIqd(quote.deposit),
+          if (priced && quote.hasDeposit)
+            line('العربون', formatIqd(quote.deposit),
                 style: t.bodyMedium?.copyWith(color: NColors.sageDark, fontWeight: FontWeight.w600)),
           if (!priced)
             Padding(

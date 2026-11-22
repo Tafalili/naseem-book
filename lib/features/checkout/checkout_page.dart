@@ -98,7 +98,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
     }
 
-    final quote = buildQuote(product: product.value!, settings: settings.value!, draft: draft, item: item);
+    final quote = buildQuote(product: product.value!, settings: settings.value!, draft: draft, item: item, pages: pages.value!);
     final form = _formCard(context, draft, pages.value!, item);
     final summary = _SummaryCard(quote: quote, product: product.value!, draft: draft, settings: settings.value!);
 
@@ -300,8 +300,8 @@ class _SummaryCard extends StatelessWidget {
             line(l.qty > 1 ? '${l.label} × ${l.qty}' : l.label, l.unpriced ? 'قريباً' : formatIqd(l.amount)),
           const Divider(height: NSpace.lg, color: NColors.line),
           line('الإجمالي', priced ? formatIqd(quote.total) : 'يُحدد عند التأكيد', style: t.titleMedium),
-          if (priced && quote.depositPercent > 0)
-            line('العربون الآن (${quote.depositPercent.round()}%)', formatIqd(quote.deposit),
+          if (priced && quote.hasDeposit)
+            line('العربون الآن', formatIqd(quote.deposit),
                 style: t.bodyMedium?.copyWith(color: NColors.sageDark, fontWeight: FontWeight.w600)),
           const SizedBox(height: NSpace.md),
           Container(
