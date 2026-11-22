@@ -130,6 +130,22 @@ class DraftController extends Notifier<DraftState> {
   }
 
   Future<void> updateCover(CoverDesign cover) => _save(_d.copyWith(cover: cover));
+
+  /// After a successful order: drop the local draft and its photos.
+  Future<void> discard(String slug) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key(slug));
+    if (raw != null) {
+      try {
+        final d = BookDraft.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        for (final p in d.photos) {
+          await PhotoStore.instance.delete(p.id);
+        }
+      } catch (_) {}
+    }
+    await prefs.remove(_key(slug));
+    if (state.draft?.productSlug == slug) state = DraftState(draft: BookDraft(productSlug: slug));
+  }
 }
 
 final draftProvider = NotifierProvider<DraftController, DraftState>(DraftController.new);

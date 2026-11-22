@@ -349,8 +349,7 @@ class _Summary extends StatelessWidget {
             ),
           const SizedBox(height: NSpace.lg),
           FilledButton(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('إتمام الطلب ودفع العربون يُفعّل في التحديث القادم'))),
+            onPressed: () => context.go(Routes.checkout),
             child: const Text('متابعة لإتمام الطلب'),
           ),
           const SizedBox(height: NSpace.md),

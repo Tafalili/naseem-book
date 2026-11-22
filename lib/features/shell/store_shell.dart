@@ -96,8 +96,7 @@ class _Header extends ConsumerWidget {
           ),
           const SizedBox(width: NSpace.xs),
           OutlinedButton.icon(
-            onPressed: () => ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('تتبع الطلب متاح قريباً'))),
+            onPressed: () => context.go(Routes.track),
             icon: const Icon(Icons.local_shipping_outlined, size: 18),
             label: const Text('تتبّع طلبك'),
             style: OutlinedButton.styleFrom(

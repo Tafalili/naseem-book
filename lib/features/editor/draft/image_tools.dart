@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'dart:js_interop';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 
 /// Opens the browser file picker for images.
-Future<List<web.File>> pickImages({bool multiple = true}) {
+Future<List<web.File>> pickImages({bool multiple = true}) => pickFiles(
+    accept: 'image/jpeg,image/png,image/webp,image/heic,image/heif', multiple: multiple);
+
+/// Opens the browser file picker.
+Future<List<web.File>> pickFiles({required String accept, bool multiple = false}) {
   final c = Completer<List<web.File>>();
   final input = web.HTMLInputElement()
     ..type = 'file'
-    ..accept = 'image/jpeg,image/png,image/webp,image/heic,image/heif'
+    ..accept = accept
     ..multiple = multiple;
   void done() {
     if (c.isCompleted) return;
@@ -87,3 +92,7 @@ Future<web.Blob> _toJpeg(web.HTMLCanvasElement canvas, double quality) {
   );
   return c.future;
 }
+
+/// Reads a Blob (or File) into memory.
+Future<Uint8List> blobBytes(web.Blob b) async =>
+    (await b.arrayBuffer().toDart).toDart.asUint8List();
