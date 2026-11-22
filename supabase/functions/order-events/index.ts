@@ -170,7 +170,7 @@ ${SITE_URL ? `<p><a href="${esc(adminUrl)}" style="background:#6E9A8B;color:#fff
       body: isNew
         ? `${o.customer_name} · ${iqd(o.total)}`
         : `العربون ${iqd(o.deposit_amount)} · ${o.customer_name}`,
-      url: `/admin/orders/${o.id}`,
+      url: `admin/orders/${o.id}`,
     });
     out.push = await sendAll(db, "admin_push_subscriptions", subs ?? [], payload);
   }
@@ -211,7 +211,7 @@ async function notifyCustomer(
   const payload = JSON.stringify({
     title: `كتاب نسيم · طلب ${o.order_code}`,
     body: STATUS[o.status] ?? o.status,
-    url: `/order/${o.order_code}`,
+    url: `order/${o.order_code}`,
   });
   return await sendAll(db, "push_subscriptions", subs ?? [], payload);
 }

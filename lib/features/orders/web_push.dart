@@ -23,7 +23,7 @@ abstract final class WebPush {
     final perm = (await web.Notification.requestPermission().toDart).toDart;
     if (perm != 'granted') return null;
     final container = web.window.navigator.serviceWorker;
-    await container.register('/push_sw.js'.toJS).toDart;
+    await container.register('push_sw.js'.toJS).toDart;
     final reg = await container.ready.toDart;
     final existing = await reg.pushManager.getSubscription().toDart;
     final sub = existing ??
