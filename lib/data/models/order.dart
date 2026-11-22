@@ -107,7 +107,7 @@ class Wallets {
   const Wallets(this.items);
   final Map<String, String> items;
 
-  static const labels = {'zaincash': 'زين كاش', 'qicard': 'كي كارد', 'fib': 'مصرف العراق الأول (FIB)'};
+  static const labels = {'zaincash': 'زين كاش', 'qicard': 'سوبر كي', 'fib': 'مصرف العراق الأول (FIB)'};
 
   Iterable<MapEntry<String, String>> get filled =>
       labels.entries.where((e) => (items[e.key] ?? '').trim().isNotEmpty)

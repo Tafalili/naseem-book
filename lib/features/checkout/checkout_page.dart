@@ -310,7 +310,7 @@ class _SummaryCard extends StatelessWidget {
             padding: const EdgeInsets.all(NSpace.md),
             decoration: const BoxDecoration(color: NColors.sageSoft, borderRadius: BorderRadius.all(NRadius.md)),
             child: Text(
-              'بعد الإرسال تظهر لكِ أرقام الدفع (زين كاش، كي كارد، FIB). ادفعي العربون وارفعي صورة الإيصال، '
+              'بعد الإرسال تظهر لكِ أرقام الدفع (زين كاش أو سوبر كي). ادفعي العربون وارفعي صورة الإيصال، '
               'ونبدأ بكتابك بعد مراجعته.',
               style: t.bodySmall?.copyWith(color: NColors.ink),
             ),
