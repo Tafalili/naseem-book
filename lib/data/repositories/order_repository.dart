@@ -114,7 +114,7 @@ class OrderRepository {
 
   static String _message(String code) => switch (code) {
         'too_many_orders' => 'وصلتِ للحد اليومي للطلبات من هذا الجهاز. تواصلي معنا إن احتجتِ طلباً إضافياً.',
-        'invalid_child_name' => 'اسم الطفل على الغلاف مطلوب (حتى 20 حرفاً).',
+        'invalid_child_name' => 'اسم الطفل على الغلاف طويل (حتى 20 حرفاً).',
         'invalid_photo' => 'لم يكتمل رفع بعض الصور. حاولي إرسال الطلب مرة أخرى.',
         'product_not_found' => 'هذا المنتج غير متوفر حالياً.',
         'order_not_awaiting_deposit' => 'هذا الطلب لا ينتظر إيصال عربون الآن.',

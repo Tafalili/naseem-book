@@ -295,8 +295,15 @@ class _Extras extends ConsumerWidget {
               icon: const Icon(Icons.add_rounded),
             ),
           ]),
-          if (draft.hasPrintedText || draft.cover.mode == CoverMode.designer) ...[
+          if (draft.hasPrintedText ||
+              draft.cover.mode == CoverMode.designer ||
+              draft.cover.childName.trim().isNotEmpty ||
+              draft.placements.isNotEmpty) ...[
             const Divider(color: NColors.line),
+            if (draft.cover.childName.trim().isNotEmpty)
+              auto(Addon.childName, 'أُضيف لأنك كتبتِ اسم طفلك على الغلاف'),
+            if (draft.placements.isNotEmpty)
+              auto(Addon.photos, 'أُضيف لأنك وضعتِ صوراً داخل الكتاب'),
             if (draft.hasPrintedText)
               auto(Addon.printedText, 'أُضيف لأنك كتبتِ نصاً داخل الصفحات'),
             if (draft.cover.mode == CoverMode.designer)

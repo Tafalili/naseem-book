@@ -206,19 +206,23 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
 
   Future<void> _addToCart(BuildContext context, Readiness ready) async {
     if (ready.nameMissing) {
-      final go = await showDialog<bool>(
+      final ok = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('اسم الطفل مطلوب'),
-          content: const Text('اكتبي اسم طفلك على الغلاف قبل إضافة الكتاب إلى السلة.'),
+          title: const Text('بدون اسم على الغلاف؟'),
+          content: const Text('لم تكتبي اسم طفلك على الغلاف، فيُطبع الغلاف بتصميمه الأصلي. '
+              'يمكنك إضافة الاسم الآن أو المتابعة بدونه.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('لاحقاً')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('اكتبي الاسم')),
+            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('متابعة بدون اسم')),
+            FilledButton(onPressed: () => Navigator.pop(c, false), child: const Text('أضيفي الاسم')),
           ],
         ),
       );
-      if (go == true && context.mounted) context.go(Routes.editor(widget.slug));
-      return;
+      if (ok == null || !context.mounted) return;
+      if (!ok) {
+        context.go(Routes.editor(widget.slug));
+        return;
+      }
     }
     if (ready.emptySlots > 0) {
       final pagesList = ready.emptyPages.take(8).join('، ');
@@ -306,7 +310,7 @@ class _Summary extends StatelessWidget {
         Text(name.isEmpty ? 'كتاب نسيم' : 'كتاب $name', style: t.headlineSmall),
         const SizedBox(height: NSpace.md),
         ready.nameMissing
-            ? row(Icons.error_outline_rounded, NColors.danger, 'لم تكتبي اسم الطفل على الغلاف بعد')
+            ? row(Icons.info_outline_rounded, NColors.warning, 'بدون اسم على الغلاف')
             : row(Icons.check_circle_rounded, NColors.success, 'الاسم على الغلاف: $name'),
         ready.emptySlots == 0
             ? row(Icons.check_circle_rounded, NColors.success, 'كل الإطارات فيها صور ($filled)')

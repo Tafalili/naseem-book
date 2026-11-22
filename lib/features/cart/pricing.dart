@@ -34,6 +34,9 @@ Quote buildQuote({
   int p(Addon a) => settings.priceOf(a);
   return Quote([
     QuoteLine(product.title, product.basePrice),
+    if (draft.cover.childName.trim().isNotEmpty)
+      QuoteLine(Addon.childName.label, p(Addon.childName), auto: true),
+    if (draft.placements.isNotEmpty) QuoteLine(Addon.photos.label, p(Addon.photos), auto: true),
     if (draft.hasPrintedText) QuoteLine(Addon.printedText.label, p(Addon.printedText), auto: true),
     if (draft.cover.mode == CoverMode.designer)
       QuoteLine(Addon.designerCover.label, p(Addon.designerCover), auto: true),

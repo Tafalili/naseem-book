@@ -16,7 +16,6 @@ import '../cart/cart_controller.dart';
 import '../cart/pricing.dart';
 import '../editor/draft/book_draft.dart';
 import '../editor/draft/draft_controller.dart';
-import '../editor/draft/readiness.dart';
 import 'checkout_controller.dart';
 
 const iraqGovernorates = [
@@ -99,9 +98,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
     }
 
-    final ready = Readiness.of(draft, pages.value!);
     final quote = buildQuote(product: product.value!, settings: settings.value!, draft: draft, item: item);
-    final form = _formCard(context, draft, pages.value!, item, ready);
+    final form = _formCard(context, draft, pages.value!, item);
     final summary = _SummaryCard(quote: quote, product: product.value!, draft: draft, settings: settings.value!);
 
     return ContentWidth(
@@ -130,7 +128,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Widget _formCard(BuildContext context, BookDraft draft, List<PageTemplate> pages, CartItem item, Readiness ready) {
+  Widget _formCard(BuildContext context, BookDraft draft, List<PageTemplate> pages, CartItem item) {
     final t = Theme.of(context).textTheme;
     final st = ref.watch(checkoutProvider);
     return Container(
@@ -196,13 +194,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               maxLength: 500,
               decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)'),
             ),
-            if (ready.nameMissing)
-              _Banner(
-                color: NColors.danger,
-                text: 'اسم الطفل على الغلاف غير مكتوب. أكمليه من التصميم قبل إرسال الطلب.',
-                action: TextButton(
-                    onPressed: () => context.go(Routes.editor(item.slug)), child: const Text('فتح التصميم')),
-              ),
             if (st.error != null) _Banner(color: NColors.danger, text: st.error!),
             const SizedBox(height: NSpace.md),
             if (st.busy) ...[
@@ -220,7 +211,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               Text('لا تغلقي الصفحة حتى يكتمل الإرسال.', textAlign: TextAlign.center, style: t.bodySmall),
             ] else
               FilledButton.icon(
-                onPressed: ready.nameMissing ? null : () => _submit(draft, pages, item),
+                onPressed: () => _submit(draft, pages, item),
                 icon: const Icon(Icons.send_rounded),
                 label: const Text('إرسال الطلب'),
               ),
@@ -251,10 +242,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 }
 
 class _Banner extends StatelessWidget {
-  const _Banner({required this.color, required this.text, this.action});
+  const _Banner({required this.color, required this.text});
   final Color color;
   final String text;
-  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +260,6 @@ class _Banner extends StatelessWidget {
         Icon(Icons.error_outline_rounded, color: color, size: 20),
         const SizedBox(width: NSpace.sm),
         Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
-        ?action,
       ]),
     );
   }

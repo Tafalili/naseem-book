@@ -1,5 +1,7 @@
 /// Optional paid features shown on the product page. Keys mirror app_settings.prices.
 enum Addon {
+  childName('child_name', 'اسم الطفل على الغلاف', 'بدل «نسيم» نكتب اسم طفلك على الواجهة'),
+  photos('photos', 'صورك داخل الكتاب', 'تملئين الإطارات بصورك، حتى 34 صورة'),
   printedText('printed_text', 'نص مطبوع داخل الصفحات', 'بدل الأسطر الفارغة التي تكتبينها بيدك'),
   designerCover('designer_cover', 'اتركي الغلاف للمصمم', 'نصمم الغلاف لكِ باسم طفلك'),
   smartManuscript('smart_manuscript', 'المخطوطة الذكية', 'نصوص مقترحة جاهزة لكل صفحة'),
