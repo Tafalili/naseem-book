@@ -15,6 +15,7 @@ class PhotoStore {
   Future<web.IDBDatabase>? _db;
 
   Future<web.IDBDatabase> _open() => _db ??= () {
+        _askPersistent();
         final c = Completer<web.IDBDatabase>();
         final req = web.window.indexedDB.open(_dbName, 1);
         req.onupgradeneeded = ((web.Event _) {
@@ -25,6 +26,14 @@ class PhotoStore {
         req.onerror = ((web.Event _) => c.completeError(StateError('IndexedDB unavailable'))).toJS;
         return c.future;
       }();
+
+  /// Asks the browser not to clear saved drafts when space runs low or the
+  /// site is not visited for a while, so a book can be finished over days.
+  static void _askPersistent() {
+    try {
+      web.window.navigator.storage.persist().toDart.ignore();
+    } catch (_) {}
+  }
 
   Future<T> _request<T>(web.IDBRequest req, T Function(JSAny?) map) {
     final c = Completer<T>();
