@@ -70,4 +70,8 @@ class Product {
         final String s => s,
         _ => null,
       };
+
+  /// Inside-cover (endpaper) and back-cover artwork for the flip preview.
+  ImageProvider? get endpaperImage => catalogImage(specs['endpaper_path'] as String?);
+  ImageProvider? get backCoverImage => catalogImage(specs['back_cover_path'] as String?);
 }
