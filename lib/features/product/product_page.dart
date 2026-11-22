@@ -204,8 +204,7 @@ class _Details extends ConsumerWidget {
         const SizedBox(height: NSpace.lg),
         FilledButton.icon(
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('محرر الكتاب يصل في التحديث القادم'))),
+          onPressed: () => context.go(Routes.editor(p.slug)),
           icon: const Icon(Icons.auto_stories_outlined),
           label: const Text('ابدئي تصميم كتابك'),
         ),
