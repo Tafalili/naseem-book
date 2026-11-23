@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>فحص المتصفح · كتاب نسيم</title>
+<style>
+  body { margin: 0; padding: 16px; background: #FBF7F0; color: #3B3631;
+    font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  li { direction: ltr; text-align: left; word-break: break-all; margin: 4px 0; list-style: none; }
+  .ok { color: #3E7B4F; } .bad { color: #B4483E; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>فحص المتصفح: صوّري هذه الصفحة كاملة وأرسليها</h1>
+<ul id="out"></ul>
+<script>
+(async function () {
+  var out = document.getElementById('out');
+  function row(name, ok, info) {
+    var li = document.createElement('li');
+    li.className = ok ? 'ok' : 'bad';
+    li.textContent = (ok ? '✓ ' : '✗ ') + name + (info ? ' — ' + info : '');
+    out.appendChild(li);
+  }
+  function msg(e) { return e && (e.message || e.name) ? (e.name + ': ' + e.message) : String(e); }
+  window.addEventListener('error', function (e) { row('window error', false, msg(e.error || e.message)); });
+  window.addEventListener('unhandledrejection', function (e) { row('rejection', false, msg(e.reason)); });
+
+  row('userAgent', true, navigator.userAgent);
+  row('WebAssembly', typeof WebAssembly === 'object');
+  try {
+    var c = document.createElement('canvas');
+    var g2 = c.getContext('webgl2');
+    row('WebGL2', !!g2, g2 ? g2.getParameter(g2.VERSION) : 'null');
+    var g1 = document.createElement('canvas').getContext('webgl');
+    row('WebGL1', !!g1);
+  } catch (e) { row('WebGL', false, msg(e)); }
+  row('OffscreenCanvas', typeof OffscreenCanvas !== 'undefined');
+  try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); row('localStorage', true); }
+  catch (e) { row('localStorage', false, msg(e)); }
+  try {
+    await new Promise(function (res, rej) {
+      var r = indexedDB.open('_diag'); r.onsuccess = function () { r.result.close(); res(); };
+      r.onerror = function () { rej(r.error); };
+    });
+    row('IndexedDB', true);
+  } catch (e) { row('IndexedDB', false, msg(e)); }
+  if ('serviceWorker' in navigator) {
+    try {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      row('service workers', true, regs.length + ' ' + regs.map(function (r) {
+        var w = r.active || r.waiting || r.installing; return w ? w.scriptURL.split('/').pop() : '?';
+      }).join(','));
+    } catch (e) { row('service workers', false, msg(e)); }
+  }
+
+  var files = ['flutter_bootstrap.js', 'flutter.js', 'main.dart.js', 'main.dart.js_1.part.js',
+    'canvaskit/canvaskit.js', 'canvaskit/canvaskit.wasm', 'assets/FontManifest.json',
+    'assets/AssetManifest.bin.json', 'assets/assets/fonts/IBMPlexSansArabic-Regular.ttf'];
+  for (var i = 0; i < files.length; i++) {
+    try {
+      var t0 = performance.now();
+      var r = await fetch(files[i], { cache: 'no-store' });
+      var b = await r.arrayBuffer();
+      row(files[i], r.ok, r.status + ' ' + (r.headers.get('content-type') || '') + ' ' +
+        Math.round(b.byteLength / 1024) + 'KB ' + Math.round(performance.now() - t0) + 'ms');
+    } catch (e) { row(files[i], false, msg(e)); }
+  }
+  try {
+    var r2 = await fetch('https://edarzlqkxgobdffcfnpx.supabase.co/auth/v1/health');
+    row('supabase reachable', true, 'HTTP ' + r2.status);
+  } catch (e) { row('supabase reachable', false, msg(e)); }
+
+  try {
+    var mod = await import('./canvaskit/canvaskit.js');
+    row('import canvaskit.js', true);
+    var ck = await mod.default({ locateFile: function (f) { return 'canvaskit/' + f; } });
+    row('CanvasKit init', true);
+    var cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+    document.body.appendChild(cv);
+    var surf = ck.MakeWebGLCanvasSurface(cv);
+    row('CanvasKit WebGL surface', !!surf);
+    if (!surf) row('CanvasKit SW surface', !!ck.MakeSWCanvasSurface(cv));
+  } catch (e) { row('CanvasKit', false, msg(e)); }
+  row('done', true);
+})();
+</script>
+</body>
+</html>
