@@ -110,13 +110,19 @@ Future<ui.Image> renderSheet(PrintBook pb, PageTemplate t) async {
   for (final ts in t.textSlots) {
     if (ts.kind == TextKind.childName) {
       if (name.isEmpty) continue;
-      inBox(ts.x, ts.y, ts.w, ts.h, ts.rotation, (sw, sh) {
+      // the customer may have moved / resized the name on the cover (cover.name_pos)
+      final np = t.isCover && cover['name_pos'] is Map ? cover['name_pos'] as Map : const {};
+      double n(Object? v, double d) => (v as num?)?.toDouble() ?? d;
+      final ns = n(np['scale'], 1).clamp(.5, 2.5);
+      final ncx = ts.x + ts.w / 2 + n(np['dx'], 0) * t.widthMm;
+      final ncy = ts.y + ts.h / 2 + n(np['dy'], 0) * t.heightMm;
+      inBox(ncx - ts.w * ns / 2, ncy - ts.h * ns / 2, ts.w * ns, ts.h * ns, ts.rotation, (sw, sh) {
         final tp = TextPainter(
           text: TextSpan(
             text: name,
             style: TextStyle(
               fontFamily: t.isCover ? ((cover['font'] as String?) ?? NFonts.ruqaa) : NFonts.naskh,
-              fontSize: ts.fontSizeMm * k,
+              fontSize: ts.fontSizeMm * k * ns,
               height: 1.25,
               color: t.isCover ? ui.Color(((cover['color'] as num?) ?? 0xFF2B2B2B).toInt()) : NColors.ink,
             ),

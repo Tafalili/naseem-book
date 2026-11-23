@@ -125,6 +125,7 @@ Map<String, dynamic> _bookPayload(CartBook b, Map<String, String> paths) {
       'font': c.font,
       'color': c.color,
       'designer_notes': c.designerNotes,
+      if (!c.namePos.isDefault) 'name_pos': c.namePos.toJson(),
       if (el != null && paths[el.photoId] != null)
         'element': {
           'photo_path': paths[el.photoId],

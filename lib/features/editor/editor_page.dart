@@ -193,6 +193,8 @@ class _EditorBody extends ConsumerWidget {
       onPlacementChanged: (id, p) => ref.read(draftProvider.notifier).updatePlacement(id, p),
       onCoverElementChanged: (e) =>
           ref.read(draftProvider.notifier).updateCover(draft.cover.copyWith(element: e)),
+      onCoverNameChanged: (np) =>
+          ref.read(draftProvider.notifier).updateCover(draft.cover.copyWith(namePos: np)),
     );
 
     final panel = page.isCover
@@ -212,6 +214,12 @@ class _EditorBody extends ConsumerWidget {
             onClear: (id) {
               ref.read(draftProvider.notifier).clearSlot(id);
               onSelect(null);
+            },
+            onZoom: (id, z) {
+              final p = draft.placements[id];
+              if (p != null) {
+                ref.read(draftProvider.notifier).updatePlacement(id, p.copyWith(scale: z));
+              }
             },
             onReset: (id) {
               final p = draft.placements[id];
@@ -503,6 +511,7 @@ class _PagePanel extends StatelessWidget {
     required this.onAutoFill,
     required this.onClear,
     required this.onReset,
+    required this.onZoom,
   });
 
   final PageTemplate page;
@@ -511,6 +520,7 @@ class _PagePanel extends StatelessWidget {
   final ValueChanged<String> onPick;
   final VoidCallback onAutoFill;
   final ValueChanged<String> onClear, onReset;
+  final void Function(String slotId, double zoom) onZoom;
 
   @override
   Widget build(BuildContext context) {
@@ -525,11 +535,23 @@ class _PagePanel extends StatelessWidget {
         Text(
           page.photoSlots.isEmpty
               ? 'لا توجد صور في هذه الصفحة. تُطبع كما هي، وتكتبين عليها بخط يدك.'
-              : 'اضغطي على إطار لإضافة صورة. بعد إضافتها اسحبيها لتحريكها، وكبّريها بإصبعين أو بعجلة الفأرة.',
+              : 'اضغطي على إطار لإضافة صورة. لضبطها اضغطي عليها مرة (يظهر حولها إطار أخضر)، ثم اسحبيها بإصبعك لتحريكها، وكبّريها بإصبعين أو من شريط التكبير.',
           style: t.bodySmall,
         ),
         if (selFilled) ...[
           const SizedBox(height: NSpace.md),
+          Row(children: [
+            const Icon(Icons.zoom_out_rounded, size: 20, color: NColors.inkMuted),
+            Expanded(
+              child: Slider(
+                min: 1,
+                max: 4,
+                value: draft.placements[sel.id]!.scale.clamp(1.0, 4.0),
+                onChanged: (z) => onZoom(sel.id, z),
+              ),
+            ),
+            const Icon(Icons.zoom_in_rounded, size: 20, color: NColors.inkMuted),
+          ]),
           Wrap(spacing: NSpace.sm, runSpacing: NSpace.sm, children: [
             OutlinedButton.icon(
               onPressed: () => onReset(sel.id),
