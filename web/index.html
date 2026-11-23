@@ -63,7 +63,7 @@
     #splash p { margin: 0; font-size: 18px; }
     #splash i { width: 28px; height: 28px; border: 3px solid #D8E5E0; border-top-color: #6E9A8B;
       border-radius: 50%; animation: spin 0.9s linear infinite; }
-    #splash-note { font-size: 14px; color: #7D746B; max-width: 300px; text-align: center; line-height: 1.6; }
+    #splash-note { font-size: 13px; color: #7D746B; max-width: 330px; direction: ltr; word-break: break-all; text-align: center; line-height: 1.6; }
     #splash-retry { font: inherit; font-size: 15px; padding: 10px 22px; border: 0; border-radius: 22px;
       background: #6E9A8B; color: #fff; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -98,11 +98,24 @@
         setTimeout(function () { s.remove(); }, 350);
       });
       // Show what went wrong instead of an endless spinner.
+      function describe(x) {
+        if (!x) return 'خطأ غير معروف';
+        if (typeof x === 'string') return x;
+        var parts = [];
+        if (x.message) parts.push(x.message);
+        var t = x.target || x.srcElement;
+        if (t && t !== window) parts.push((t.tagName || '') + ' ' + (t.src || t.href || t.currentSrc || ''));
+        if (x.filename) parts.push(x.filename.split('/').pop() + ':' + (x.lineno || 0));
+        if (x.type && !x.message) parts.push('[' + x.type + ']');
+        if (x.error && x.error.stack) parts.push(String(x.error.stack).slice(0, 160));
+        if (x.stack && !x.error) parts.push(String(x.stack).slice(0, 160));
+        return parts.join(' | ') || Object.prototype.toString.call(x);
+      }
       window.addEventListener('error', function (e) {
-        note('تعذّر تحميل الموقع: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'خطأ غير معروف'), true);
+        note('تعذّر تحميل الموقع: ' + describe(e), true);
       }, true);
       window.addEventListener('unhandledrejection', function (e) {
-        note('تعذّر تحميل الموقع: ' + ((e.reason && e.reason.message) || e.reason || 'خطأ غير معروف'), true);
+        note('تعذّر تحميل الموقع: ' + describe(e.reason), true);
       });
       setTimeout(function () { note('التحميل أخذ وقتاً أطول من المعتاد. تأكدي من الإنترنت ثم أعيدي المحاولة.', true); }, 30000);
       // Remove the old Flutter service worker left by earlier versions (keeps push_sw.js).
