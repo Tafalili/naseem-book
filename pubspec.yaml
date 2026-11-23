@@ -33,6 +33,7 @@ flutter:
     - assets/templates/naseem-classic/
     - assets/templates/friends-book/
     - assets/catalog/friends-book/
+    - assets/brand/
   fonts:
     - family: IBMPlexSansArabic
       fonts:
