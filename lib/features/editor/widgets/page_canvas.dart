@@ -27,6 +27,7 @@ class PageCanvas extends StatelessWidget {
     this.onPlacementChanged,
     this.onCoverElementChanged,
     this.onCoverElementTap,
+    this.onCoverNameChanged,
   });
 
   final PageTemplate template;
@@ -38,6 +39,7 @@ class PageCanvas extends StatelessWidget {
   final void Function(String slotId, Placement p)? onPlacementChanged;
   final void Function(CoverElement e)? onCoverElementChanged;
   final VoidCallback? onCoverElementTap;
+  final ValueChanged<NamePos>? onCoverNameChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +47,7 @@ class PageCanvas extends StatelessWidget {
       aspectRatio: template.widthMm / template.heightMm,
       child: LayoutBuilder(builder: (context, c) {
         final k = c.maxWidth / template.widthMm; // px per mm
+        final size = Size(c.maxWidth, c.maxWidth * template.heightMm / template.widthMm);
         final bg = template.background;
         return ClipRect(
           child: Stack(
@@ -78,12 +81,24 @@ class PageCanvas extends StatelessWidget {
                   ),
                 ),
               for (final t in template.textSlots)
-                _positioned(k, t.x, t.y, t.w, t.h, t.rotation, _textSlot(t, k)),
+                if (template.isCover &&
+                    t.kind == TextKind.childName &&
+                    draft.cover.childName.trim().isNotEmpty)
+                  _CoverNameView(
+                    slot: t,
+                    k: k,
+                    size: size,
+                    cover: draft.cover,
+                    interactive: interactive && onCoverNameChanged != null,
+                    onChanged: onCoverNameChanged,
+                  )
+                else
+                  _positioned(k, t.x, t.y, t.w, t.h, t.rotation, _textSlot(t, k)),
               if (template.isCover && draft.cover.element != null)
                 _CoverElementView(
                   element: draft.cover.element!,
                   photo: draft.photo(draft.cover.element!.photoId),
-                  size: Size(c.maxWidth, c.maxWidth * template.heightMm / template.widthMm),
+                  size: size,
                   interactive: interactive,
                   onChanged: onCoverElementChanged,
                   onTap: onCoverElementTap,
@@ -310,27 +325,24 @@ class _PhotoSlotViewState extends ConsumerState<_PhotoSlotView> {
       },
       child: MouseRegion(
         cursor: _editable ? SystemMouseCursors.move : SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        child: Manipulator(
+          enabled: _editable,
           onTap: widget.onTap,
-          onScaleStart: _editable
-              ? (d) {
-                  _start = widget.placement;
-                  _startFocal = d.focalPoint;
-                }
-              : null,
-          onScaleUpdate: _editable
-              ? (d) {
-                  final st = _start!;
-                  final delta = d.focalPoint - _startFocal;
-                  setState(() => _live = _clamp(st.copyWith(
-                        scale: st.scale * d.scale,
-                        dx: st.dx + delta.dx / s.width,
-                        dy: st.dy + delta.dy / s.height,
-                      )));
-                }
-              : null,
-          onScaleEnd: _editable ? (_) => _commit() : null,
+          onStart: (d) {
+            _start = widget.placement;
+            _startFocal = d.focalPoint;
+          },
+          onUpdate: (d) {
+            final st = _start;
+            if (st == null) return;
+            final delta = d.focalPoint - _startFocal;
+            setState(() => _live = _clamp(st.copyWith(
+                  scale: st.scale * d.scale,
+                  dx: st.dx + delta.dx / s.width,
+                  dy: st.dy + delta.dy / s.height,
+                )));
+          },
+          onEnd: () => setState(_commit),
           child: clipped,
         ),
       ),
@@ -428,14 +440,15 @@ class _CoverElementViewState extends ConsumerState<_CoverElementView> {
                     widget.onChanged?.call(
                         widget.element.copyWith(width: (widget.element.width * f).clamp(.12, 1.0)));
                   },
-                  child: GestureDetector(
+                  child: Manipulator(
                     onTap: widget.onTap,
-                    onScaleStart: (d) {
+                    onStart: (d) {
                       _start = widget.element;
                       _startFocal = d.focalPoint;
                     },
-                    onScaleUpdate: (d) {
-                      final st = _start!;
+                    onUpdate: (d) {
+                      final st = _start;
+                      if (st == null) return;
                       final delta = d.focalPoint - _startFocal;
                       setState(() => _live = st.copyWith(
                             cx: (st.cx + delta.dx / widget.size.width).clamp(0.0, 1.0),
@@ -444,7 +457,7 @@ class _CoverElementViewState extends ConsumerState<_CoverElementView> {
                             rotation: st.rotation + d.rotation,
                           ));
                     },
-                    onScaleEnd: (_) {
+                    onEnd: () {
                       if (_live != null) widget.onChanged?.call(_live!);
                       setState(() {
                         _live = null;
@@ -457,6 +470,197 @@ class _CoverElementViewState extends ConsumerState<_CoverElementView> {
               ),
       ),
     );
+  }
+}
+
+/// The child's name on the cover: drag to move, pinch (or mouse wheel) to resize.
+class _CoverNameView extends StatefulWidget {
+  const _CoverNameView({
+    required this.slot,
+    required this.k,
+    required this.size,
+    required this.cover,
+    required this.interactive,
+    this.onChanged,
+  });
+
+  final TextSlot slot;
+  final double k;
+  final Size size;
+  final CoverDesign cover;
+  final bool interactive;
+  final ValueChanged<NamePos>? onChanged;
+
+  @override
+  State<_CoverNameView> createState() => _CoverNameViewState();
+}
+
+class _CoverNameViewState extends State<_CoverNameView> {
+  NamePos? _live, _start;
+  Offset _startFocal = Offset.zero;
+
+  NamePos _clamp(NamePos p) {
+    final t = widget.slot, sz = widget.size, k = widget.k;
+    final cx0 = (t.x + t.w / 2) * k / sz.width, cy0 = (t.y + t.h / 2) * k / sz.height;
+    return NamePos(
+      dx: p.dx.clamp(-cx0, 1 - cx0),
+      dy: p.dy.clamp(-cy0, 1 - cy0),
+      scale: p.scale.clamp(NamePos.minScale, NamePos.maxScale),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.slot, k = widget.k, sz = widget.size, cover = widget.cover;
+    final np = _live ?? cover.namePos;
+    final w = t.w * k * np.scale, h = t.h * k * np.scale;
+    final cx = (t.x + t.w / 2) * k + np.dx * sz.width;
+    final cy = (t.y + t.h / 2) * k + np.dy * sz.height;
+
+    Widget text = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        cover.childName.trim(),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: cover.font,
+          fontSize: t.fontSizeMm * k * np.scale,
+          height: 1.25,
+          color: Color(cover.color),
+        ),
+      ),
+    );
+    if (widget.interactive) {
+      text = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(6)),
+          border: Border.all(
+              color: _live != null ? NColors.sage : NColors.sage.withValues(alpha: .45),
+              width: _live != null ? 2 : 1),
+        ),
+        child: text,
+      );
+      text = Listener(
+        onPointerSignal: (e) {
+          if (e is! PointerScrollEvent) return;
+          final p = cover.namePos;
+          widget.onChanged?.call(_clamp(p.copyWith(scale: p.scale * (e.scrollDelta.dy > 0 ? .95 : 1.05))));
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.move,
+          child: Manipulator(
+            onStart: (d) {
+              _start = cover.namePos;
+              _startFocal = d.focalPoint;
+            },
+            onUpdate: (d) {
+              final st = _start;
+              if (st == null) return;
+              final delta = d.focalPoint - _startFocal;
+              setState(() => _live = _clamp(st.copyWith(
+                    dx: st.dx + delta.dx / sz.width,
+                    dy: st.dy + delta.dy / sz.height,
+                    scale: st.scale * d.scale,
+                  )));
+            },
+            onEnd: () {
+              if (_live != null) widget.onChanged?.call(_live!);
+              setState(() {
+                _live = null;
+                _start = null;
+              });
+            },
+            child: text,
+          ),
+        ),
+      );
+    }
+    return Positioned(
+      left: cx - w / 2,
+      top: cy - h / 2,
+      width: w,
+      height: h,
+      child: t.rotation == 0 ? text : Transform.rotate(angle: _rad(t.rotation), child: text),
+    );
+  }
+}
+
+/// Drag / pinch / rotate that wins over the page's scrolling as soon as a
+/// finger touches it (otherwise on phones the scroll view takes every drag).
+/// A short touch without movement still counts as a tap.
+class Manipulator extends StatefulWidget {
+  const Manipulator({
+    super.key,
+    required this.child,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final GestureScaleStartCallback onStart;
+  final GestureScaleUpdateCallback onUpdate;
+  final VoidCallback onEnd;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  State<Manipulator> createState() => _ManipulatorState();
+}
+
+class _ManipulatorState extends State<Manipulator> {
+  Offset _origin = Offset.zero;
+  double _travel = 0;
+  bool _multi = false;
+  DateTime _t0 = DateTime.now();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onTap, child: widget.child);
+    }
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        _EagerScaleRecognizer: GestureRecognizerFactoryWithHandlers<_EagerScaleRecognizer>(
+          () => _EagerScaleRecognizer(debugOwner: this),
+          (r) => r
+            ..onStart = (d) {
+              _origin = d.focalPoint;
+              _travel = 0;
+              _multi = d.pointerCount > 1;
+              _t0 = DateTime.now();
+              widget.onStart(d);
+            }
+            ..onUpdate = (d) {
+              _travel = math.max(_travel, (d.focalPoint - _origin).distance);
+              if (d.pointerCount > 1) _multi = true;
+              widget.onUpdate(d);
+            }
+            ..onEnd = (_) {
+              final tap = !_multi &&
+                  _travel < 8 &&
+                  DateTime.now().difference(_t0) < const Duration(milliseconds: 350);
+              widget.onEnd();
+              if (tap) widget.onTap?.call();
+            },
+        ),
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _EagerScaleRecognizer extends ScaleGestureRecognizer {
+  _EagerScaleRecognizer({super.debugOwner});
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
 

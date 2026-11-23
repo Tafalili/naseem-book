@@ -120,6 +120,32 @@ class _CoverPanelState extends ConsumerState<CoverPanel> {
                 ),
             ],
           ),
+          if (cover.childName.trim().isNotEmpty) ...[
+            const SizedBox(height: NSpace.md),
+            Text('حجم الاسم ومكانه', style: t.labelLarge),
+            Text('اسحبي الاسم على الغلاف لتحريكه، وكبّريه بإصبعين أو من الشريط.', style: t.bodySmall),
+            Row(children: [
+              const Icon(Icons.text_decrease_rounded, size: 20, color: NColors.inkMuted),
+              Expanded(
+                child: Slider(
+                  min: NamePos.minScale,
+                  max: NamePos.maxScale,
+                  value: cover.namePos.scale.clamp(NamePos.minScale, NamePos.maxScale),
+                  onChanged: (v) => _update(cover.copyWith(namePos: cover.namePos.copyWith(scale: v))),
+                ),
+              ),
+              const Icon(Icons.text_increase_rounded, size: 20, color: NColors.inkMuted),
+            ]),
+            if (!cover.namePos.isDefault)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: () => _update(cover.copyWith(namePos: const NamePos())),
+                  icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                  label: const Text('إرجاع الاسم لمكانه الأصلي'),
+                ),
+              ),
+          ],
           const SizedBox(height: NSpace.lg),
           Text('صورة أو ملصق على الغلاف (اختياري)', style: t.labelLarge),
           const SizedBox(height: NSpace.xs),
@@ -132,6 +158,27 @@ class _CoverPanelState extends ConsumerState<CoverPanel> {
           else ...[
             Text('اسحبي الصورة لتحريكها، وكبّريها أو دوّريها بإصبعين (أو بعجلة الفأرة).',
                 style: t.bodySmall),
+            Row(children: [
+              const Icon(Icons.photo_size_select_small_rounded, size: 20, color: NColors.inkMuted),
+              Expanded(
+                child: Slider(
+                  min: .12,
+                  max: 1,
+                  value: cover.element!.width.clamp(.12, 1.0),
+                  onChanged: (v) => _update(cover.copyWith(element: cover.element!.copyWith(width: v))),
+                ),
+              ),
+              const Icon(Icons.photo_size_select_large_rounded, size: 20, color: NColors.inkMuted),
+            ]),
+            if (cover.element!.rotation != 0)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: () => _update(cover.copyWith(element: cover.element!.copyWith(rotation: 0))),
+                  icon: const Icon(Icons.rotate_left_rounded, size: 18),
+                  label: const Text('إلغاء التدوير'),
+                ),
+              ),
             const SizedBox(height: NSpace.xs),
             Wrap(spacing: NSpace.sm, children: [
               OutlinedButton(onPressed: _addPhoto, child: const Text('تغيير الصورة')),

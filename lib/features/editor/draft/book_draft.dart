@@ -66,6 +66,26 @@ class CoverElement {
       );
 }
 
+/// Where the child's name sits on the cover, relative to the template's name box:
+/// centre offset as a fraction of the cover size, and a size multiplier.
+class NamePos {
+  const NamePos({this.dx = 0, this.dy = 0, this.scale = 1});
+  final double dx, dy, scale;
+
+  static const minScale = .5, maxScale = 2.5;
+  bool get isDefault => dx == 0 && dy == 0 && scale == 1;
+
+  NamePos copyWith({double? dx, double? dy, double? scale}) =>
+      NamePos(dx: dx ?? this.dx, dy: dy ?? this.dy, scale: scale ?? this.scale);
+
+  Map<String, dynamic> toJson() => {'dx': dx, 'dy': dy, 'scale': scale};
+  factory NamePos.fromJson(Map<String, dynamic> j) => NamePos(
+        dx: (j['dx'] as num?)?.toDouble() ?? 0,
+        dy: (j['dy'] as num?)?.toDouble() ?? 0,
+        scale: (j['scale'] as num?)?.toDouble() ?? 1,
+      );
+}
+
 class CoverDesign {
   const CoverDesign({
     this.mode = CoverMode.manual,
@@ -74,6 +94,7 @@ class CoverDesign {
     this.color = 0xFF2B2622,
     this.element,
     this.designerNotes = '',
+    this.namePos = const NamePos(),
   });
 
   final CoverMode mode;
@@ -82,6 +103,7 @@ class CoverDesign {
   final int color;
   final CoverElement? element;
   final String designerNotes;
+  final NamePos namePos;
 
   CoverDesign copyWith({
     CoverMode? mode,
@@ -91,6 +113,7 @@ class CoverDesign {
     CoverElement? element,
     bool clearElement = false,
     String? designerNotes,
+    NamePos? namePos,
   }) =>
       CoverDesign(
         mode: mode ?? this.mode,
@@ -99,6 +122,7 @@ class CoverDesign {
         color: color ?? this.color,
         element: clearElement ? null : (element ?? this.element),
         designerNotes: designerNotes ?? this.designerNotes,
+        namePos: namePos ?? this.namePos,
       );
 
   Map<String, dynamic> toJson() => {
@@ -108,6 +132,7 @@ class CoverDesign {
         'color': color,
         if (element != null) 'element': element!.toJson(),
         'notes': designerNotes,
+        if (!namePos.isDefault) 'name_pos': namePos.toJson(),
       };
 
   factory CoverDesign.fromJson(Map<String, dynamic> j) => CoverDesign(
@@ -119,6 +144,9 @@ class CoverDesign {
             ? null
             : CoverElement.fromJson(Map<String, dynamic>.from(j['element'] as Map)),
         designerNotes: j['notes'] as String? ?? '',
+        namePos: j['name_pos'] is Map
+            ? NamePos.fromJson(Map<String, dynamic>.from(j['name_pos'] as Map))
+            : const NamePos(),
       );
 }
 
