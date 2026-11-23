@@ -101,6 +101,7 @@
       window.addEventListener('error', function (e) {
         note('تعذّر تحميل الموقع: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'خطأ غير معروف'), true);
       }, true);
+      window.naseemReportError = function (text) { note('تعذّر تحميل الموقع: ' + text, true); };
       window.addEventListener('unhandledrejection', function (e) {
         note('تعذّر تحميل الموقع: ' + ((e.reason && e.reason.message) || e.reason || 'خطأ غير معروف'), true);
       });
