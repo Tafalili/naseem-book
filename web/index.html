@@ -114,6 +114,7 @@
       window.addEventListener('error', function (e) {
         note('تعذّر تحميل الموقع: ' + describe(e), true);
       }, true);
+      window.naseemReportError = function (text) { note('تعذّر تحميل الموقع: ' + text, true); };
       window.addEventListener('unhandledrejection', function (e) {
         note('تعذّر تحميل الموقع: ' + describe(e.reason), true);
       });
