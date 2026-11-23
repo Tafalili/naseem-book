@@ -63,6 +63,9 @@
     #splash p { margin: 0; font-size: 18px; }
     #splash i { width: 28px; height: 28px; border: 3px solid #D8E5E0; border-top-color: #6E9A8B;
       border-radius: 50%; animation: spin 0.9s linear infinite; }
+    #splash-note { font-size: 14px; color: #7D746B; max-width: 300px; text-align: center; line-height: 1.6; }
+    #splash-retry { font: inherit; font-size: 15px; padding: 10px 22px; border: 0; border-radius: 22px;
+      background: #6E9A8B; color: #fff; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -70,12 +73,48 @@
   <!-- Shown while the app downloads on slow connections; removed on Flutter's first frame. -->
   <div id="splash"><img src="icons/Icon-192.png" alt=""><p>كتاب نسيم</p><i></i></div>
   <script>
-    window.addEventListener('flutter-first-frame', function () {
-      var s = document.getElementById('splash');
-      if (!s) return;
-      s.style.opacity = '0';
-      setTimeout(function () { s.remove(); }, 350);
-    });
+    (function () {
+      var done = false;
+      function splash() { return document.getElementById('splash'); }
+      function note(text, retry) {
+        var s = splash();
+        if (!s || done) return;
+        var p = document.getElementById('splash-note');
+        if (!p) { p = document.createElement('p'); p.id = 'splash-note'; s.appendChild(p); }
+        p.textContent = text;
+        if (retry && !document.getElementById('splash-retry')) {
+          var b = document.createElement('button');
+          b.id = 'splash-retry';
+          b.textContent = 'إعادة المحاولة';
+          b.onclick = function () { location.reload(); };
+          s.appendChild(b);
+        }
+      }
+      window.addEventListener('flutter-first-frame', function () {
+        done = true;
+        var s = splash();
+        if (!s) return;
+        s.style.opacity = '0';
+        setTimeout(function () { s.remove(); }, 350);
+      });
+      // Show what went wrong instead of an endless spinner.
+      window.addEventListener('error', function (e) {
+        note('تعذّر تحميل الموقع: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'خطأ غير معروف'), true);
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        note('تعذّر تحميل الموقع: ' + ((e.reason && e.reason.message) || e.reason || 'خطأ غير معروف'), true);
+      });
+      setTimeout(function () { note('التحميل أخذ وقتاً أطول من المعتاد. تأكدي من الإنترنت ثم أعيدي المحاولة.', true); }, 30000);
+      // Remove the old Flutter service worker left by earlier versions (keeps push_sw.js).
+      if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function (rs) {
+          rs.forEach(function (r) {
+            var w = r.active || r.waiting || r.installing;
+            if (w && w.scriptURL.indexOf('flutter_service_worker') !== -1) r.unregister();
+          });
+        }).catch(function () {});
+      }
+    })();
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
