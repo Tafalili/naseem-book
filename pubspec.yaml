@@ -33,35 +33,17 @@ flutter:
     - assets/templates/naseem-classic/
     - assets/templates/friends-book/
     - assets/catalog/friends-book/
+    - assets/brand/
+    # Book fonts load on demand (LazyFonts) so the storefront opens faster.
+    - assets/fonts/lazy/
   fonts:
     - family: IBMPlexSansArabic
       fonts:
         - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
         - asset: assets/fonts/IBMPlexSansArabic-Medium.ttf
           weight: 500
-        - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
-          weight: 600
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
     - family: ReemKufi
       fonts:
         - asset: assets/fonts/ReemKufi-Variable.ttf
-    - family: Marhey
-      fonts:
-        - asset: assets/fonts/Marhey-Variable.ttf
-    - family: Tajawal
-      fonts:
-        - asset: assets/fonts/Tajawal-Regular.ttf
-        - asset: assets/fonts/Tajawal-Bold.ttf
-          weight: 700
-    - family: Amiri
-      fonts:
-        - asset: assets/fonts/Amiri-Regular.ttf
-        - asset: assets/fonts/Amiri-Bold.ttf
-          weight: 700
-    - family: ArefRuqaa
-      fonts:
-        - asset: assets/fonts/ArefRuqaa-Regular.ttf
-        - asset: assets/fonts/ArefRuqaa-Bold.ttf
-          weight: 700
-

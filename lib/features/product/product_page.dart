@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/format/money.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/lazy_fonts.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/product.dart';
 import '../../data/models/public_settings.dart';
@@ -60,6 +61,13 @@ class _ProductView extends ConsumerStatefulWidget {
 
 class _ProductViewState extends ConsumerState<_ProductView> {
   int _image = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch the book fonts in the background so the designer opens ready.
+    if (!widget.product.isItem) LazyFonts.ensure();
+  }
 
   @override
   Widget build(BuildContext context) {

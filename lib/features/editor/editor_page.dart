@@ -15,6 +15,7 @@ import 'draft/draft_controller.dart';
 import 'widgets/cover_panel.dart';
 import 'widgets/page_canvas.dart';
 import 'widgets/photo_tray.dart';
+import '../../core/theme/lazy_fonts.dart';
 
 class EditorPage extends ConsumerStatefulWidget {
   const EditorPage({super.key, required this.book});
@@ -32,6 +33,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   @override
   void initState() {
     super.initState();
+    LazyFonts.ensure();
     ref.read(draftProvider.notifier).load(widget.book);
   }
 

@@ -57,18 +57,7 @@ class _Header extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: NColors.sageSoft,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text('ن',
-                      style: TextStyle(
-                          fontFamily: NFonts.ruqaa, fontSize: 22, color: NColors.sageDark)),
-                ),
+                Image.asset('assets/brand/logo.png', width: 44, height: 44, filterQuality: FilterQuality.medium),
                 const SizedBox(width: NSpace.sm),
                 Text('كتاب نسيم',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 22)),
