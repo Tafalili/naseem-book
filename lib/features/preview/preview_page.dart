@@ -14,6 +14,7 @@ import '../editor/draft/book_draft.dart';
 import '../editor/draft/draft_controller.dart';
 import '../editor/draft/readiness.dart';
 import '../editor/widgets/page_canvas.dart';
+import '../../core/theme/lazy_fonts.dart';
 
 /// Flip-through preview of the finished book: cover, endpaper, 34 pages,
 /// endpaper, back cover. Right-to-left, two-page spreads on wide screens.
@@ -33,6 +34,7 @@ class _PreviewPageState extends ConsumerState<PreviewPage> {
   @override
   void initState() {
     super.initState();
+    LazyFonts.ensure();
     ref.read(draftProvider.notifier).load(widget.book);
   }
 

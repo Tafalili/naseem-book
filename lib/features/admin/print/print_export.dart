@@ -13,6 +13,7 @@ import '../../../core/theme/typography.dart';
 import '../../../data/models/page_template.dart';
 import '../../editor/draft/image_tools.dart';
 import '../data/admin_repository.dart';
+import '../../../core/theme/lazy_fonts.dart';
 
 /// Print geometry at 300 DPI, matching the store's own A4 files:
 /// pages are 186×276 mm, odd pages flush right and even pages flush left
@@ -218,6 +219,7 @@ typedef PrintProgress = void Function(String stage, int done, int total);
 /// Builds the print package of an order: one folder per book with the front
 /// cover and every page as A4 300 DPI JPEGs, plus a notes file.
 Future<Uint8List> buildPrintZip(AdminRepository repo, AdminOrder order, {required PrintProgress onProgress}) async {
+  await LazyFonts.ensure();
   final archive = Archive();
   final notes = StringBuffer()
     ..writeln('طلب ${order.row.code} · ${order.row.customerName} · ${order.row.phone}')

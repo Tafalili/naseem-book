@@ -12,6 +12,7 @@ import '../editor/draft/image_tools.dart';
 import 'admin_shell.dart';
 import 'data/admin_repository.dart';
 import 'print/print_files_dialog.dart';
+import '../../core/theme/lazy_fonts.dart';
 
 final _productsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminRepositoryProvider).products());
 
@@ -99,6 +100,7 @@ class _EditorState extends ConsumerState<_Editor> {
   @override
   void initState() {
     super.initState();
+    LazyFonts.ensure();
     _load();
   }
 
